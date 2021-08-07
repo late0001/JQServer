@@ -13,7 +13,7 @@
 #define LOG_INFO(a, b)	\
 	{\
 		char log_str[LOG_STR_BUF_LEN];\
-		snprintf(log_str, LOG_STR_BUF_LEN, "[%s %s %d] %s", __FILE__, __FUNCTION__, __LINE__, b);\
+		snprintf(log_str, LOG_STR_BUF_LEN, "%s %s(%d) %s", __FILE__, __FUNCTION__, __LINE__, b);\
 		log_string(a, log_str);\
 	}
 

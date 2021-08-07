@@ -1,8 +1,8 @@
 /*
  * g_net_update.c
  *
- *  Created on: 2015ï¿½ï¿½2ï¿½ï¿½5ï¿½ï¿½
- *      Author: vae
+ *  Created on: 2015Äê3ÔÂ16ÈÕ
+ *      Author: j8
  */
 /********************** g_net update version 2.0 ***************************/
 #include "config_info.h"
@@ -25,7 +25,7 @@ static pthread_t send_thread_t;
 static int current_connected_total = 0; // the connections number
 static int exit_accept_flag = 0; // is exit the accept
 static int exit_flag = 0; // is exit the epoll wait
-static int port = 8111;
+static int port = 8812;
 
 static void closesocket(int fd);
 static void dumpInfo(unsigned char *info, int length);
@@ -373,9 +373,9 @@ static void dumpInfo(unsigned char *info, int length)
 void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index)
 {
 	char log_str_buf[LOG_STR_BUF_LEN];
-	char send_buffer[1024] = "i have get you data";
+	char send_buffer[1024] = "I have get you data";
 	int sockfd = parameter->fd;
-	printf("get buffer = %s\n", parameter->recv_buffer);
+	printf("get buffer: %s\n", parameter->recv_buffer);
 	printf("sockfd = %d\n", sockfd);
 	send_buffer_to_fd(sockfd, send_buffer, strlen(send_buffer));
 	// deal with you logic
@@ -389,6 +389,40 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 		closesocket(sockfd);
 		sockfd = -1;
 	}
+
+}
+void recycle_timeout_confd(thpool_t* thpool,time_t now, struct epoll_event *ev)
+{
+	int index = 0;
+	int connect_socket_fd_temp = -1;
+	int delete_pool_job_number = 0;
+	char log_str_buf[LOG_STR_BUF_LEN];
+	for (index = 0; index < MAX_EVENTS; index++)
+	{
+		connect_socket_fd_temp = get_fd_by_event_index(index);
+		if (connect_socket_fd_temp != -1)
+		{
+			if ((now - get_event_connect_time_by_index(index)) > SERVER_TIMEOUT)
+			{
+				snprintf(log_str_buf, LOG_STR_BUF_LEN, "Epoll event[%d] timeout closed and fd= %d.\n", index, connect_socket_fd_temp);
+				LOG_INFO(LOG_LEVEL_INDISPENSABLE, log_str_buf);
+				free_event_by_index(index);
+				if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, connect_socket_fd_temp, ev) == -1)
+				{
+					snprintf(log_str_buf, LOG_STR_BUF_LEN, "EPOLL_CTL_DEL %d,%s.\n", errno, strerror(errno));
+					LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+				}
+				connect_total_count_sub(1);
+				closesocket(connect_socket_fd_temp);
+				connect_socket_fd_temp = -1;
+			}
+		}
+	}
+	// delete the pool job time out job
+	delete_pool_job_number = delete_timeout_job(thpool, SERVER_TIMEOUT);
+	connect_total_count_sub(delete_pool_job_number);
+	snprintf(log_str_buf, LOG_STR_BUF_LEN, "pool queque delete job number = %d.\n", delete_pool_job_number);
+	LOG_INFO(LOG_LEVEL_INDISPENSABLE, log_str_buf);
 
 }
 /*******************************************************************/
@@ -405,7 +439,7 @@ int main(int argc, char *argv[])
 	int epoll_events_number = 0;
 	int index = 0;
 	int connect_socket_fd_temp = -1;
-	int delete_pool_job_number = 0;
+	
 
 	if (2 != argc)
 	{
@@ -424,7 +458,7 @@ int main(int argc, char *argv[])
 	signal(SIGCHLD, SIG_IGN); // Ignore the child to the end of the signal, preventing the zombie process(2015.7.17)
 
 	// init log
-	sprintf(log_file_name, "log_%d", port);
+	sprintf(log_file_name, "log_%d.txt", port);
 	// for distinguish between different ports
 	set_log_file_name(log_file_name);
 	if (log_init() != 0)
@@ -505,32 +539,7 @@ int main(int argc, char *argv[])
 		if (abs(now - eventTime) >= SERVER_TIMEOUT) //SERVER_TIMEOUT second detect one time delete the time out event
 		{
 			eventTime = now;
-			for (index = 0; index < MAX_EVENTS; index++)
-			{
-				connect_socket_fd_temp = get_fd_by_event_index(index);
-				if (connect_socket_fd_temp != -1)
-				{
-					if ((now - get_event_connect_time_by_index(index)) > SERVER_TIMEOUT)
-					{
-						snprintf(log_str_buf, LOG_STR_BUF_LEN, "Epoll event[%d] timeout closed and fd= %d.\n", index, connect_socket_fd_temp);
-						LOG_INFO(LOG_LEVEL_INDISPENSABLE, log_str_buf);
-						free_event_by_index(index);
-						if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, connect_socket_fd_temp, &ev) == -1)
-						{
-							snprintf(log_str_buf, LOG_STR_BUF_LEN, "EPOLL_CTL_DEL %d,%s.\n", errno, strerror(errno));
-							LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
-						}
-						connect_total_count_opration(FALSE, 1);
-						closesocket(connect_socket_fd_temp);
-						connect_socket_fd_temp = -1;
-					}
-				}
-			}
-			// delete the pool job time out job
-			delete_pool_job_number = delete_timeout_job(thpool, SERVER_TIMEOUT);
-			connect_total_count_sub(delete_pool_job_number);
-			snprintf(log_str_buf, LOG_STR_BUF_LEN, "pool queque delete job number = %d.\n", delete_pool_job_number);
-			LOG_INFO(LOG_LEVEL_INDISPENSABLE, log_str_buf);
+			recycle_timeout_confd(thpool, now, &ev);
 		}
 		epoll_events_number = epoll_wait(epoll_fd, events, MAX_EVENTS, 2000); //2seconds
 		for (index = 0; index < epoll_events_number; ++index) // deal with the event

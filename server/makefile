@@ -15,7 +15,7 @@ CC=gcc
 # ========================================================================================
 # TARGET/Source definitions
 SRCDIR = .
-TARGET = epoll_server
+TARGET = jqserver
 OBJS = $(TARGET).o
 SRC = $(wildcard $(SRCDIR)/*.c)
 
