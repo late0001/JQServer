@@ -25,6 +25,7 @@ typedef struct _epoll_connect_struct_
 } EPOLL_CONNECT;
 
 void init_epoll_connect(void);
+void init_epoll_connect_by_index(int iEvent, int iConnectFD, char *uiClientIP);
 int get_epoll_connect_free_event_index(void);
 int get_matched_event_index_by_fd(int iConnectFD);
 void free_event_by_index(int index);

@@ -26,7 +26,7 @@ static void lock_event_state(int iEvent, int iLock)
 	if (iRet != 0)
 	{
 		snprintf(log_str_buf, LOG_STR_BUF_LEN, "Event[%d] mutex Lock[%d]\n", iEvent, iLock);
-		log_string(LOG_LEVEL_ERROR, log_str_buf);
+		log_s(LOG_LEVEL_ERROR, log_str_buf);
 	}
 }
 
@@ -44,7 +44,7 @@ void init_epoll_connect(void)
 		if (iRet != 0)
 		{
 			snprintf(log_str_buf, LOG_STR_BUF_LEN, "file connection.c Event[%d] mutex init\n", iRet);
-			log_string(LOG_LEVEL_INFO, log_str_buf);
+			log_s(LOG_LEVEL_INFO, log_str_buf);
 		}
 	}
 }

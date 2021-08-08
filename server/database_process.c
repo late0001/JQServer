@@ -38,8 +38,7 @@ int get_upgrade_count_from_database ()
 	socket_node = get_db_connect_from_pool();
 	if (NULL == socket_node)
 	{
-		snprintf(log_str_buf, LOG_STR_BUF_LEN, "Get socket node error.\n");
-		LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+		LOG_INFO(LOG_LEVEL_ERROR, "Get socket node error.\n");
 		return upgrade_count;
 	}
 	if(mysql_query(&(socket_node->fd), MYSQL_SELECT_UPGRADE_COUNT_STATEMENT_TEST))

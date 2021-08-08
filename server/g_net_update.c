@@ -30,19 +30,6 @@ static int port = 8812;
 static void closesocket(int fd);
 static void dumpInfo(unsigned char *info, int length);
 pthread_mutex_t connect_total_count_mutex = PTHREAD_MUTEX_INITIALIZER;
-static void connect_total_count_opration(BOOL add_or_subract, int value)
-{
-	pthread_mutex_lock(&connect_total_count_mutex);
-	if (add_or_subract)
-	{
-		current_connected_total = current_connected_total + value;
-	}
-	else
-	{
-		current_connected_total = current_connected_total - value;
-	}
-	pthread_mutex_unlock(&connect_total_count_mutex);
-}
 
 static void connect_total_count_add(int value)
 {
@@ -67,8 +54,7 @@ static void signal_handler_reboot(int32_t theSignal)
 	signal(SIGPIPE, SIG_IGN);
 	if (SIGKILL == theSignal || SIGTERM == theSignal) //we can know when system excute child thread is end
 	{
-		snprintf(log_str_buf, LOG_STR_BUF_LEN, "receive kill signal exit the server.");
-		LOG_INFO(LOG_LEVEL_FATAL, log_str_buf);
+		LOG_INFO(LOG_LEVEL_FATAL,  "receive kill signal exit the server.");
 		if (listen_fd != -1)
 		{
 			closesocket(listen_fd);
@@ -108,15 +94,13 @@ static int set_non_blocking(int sock)
 	opts = fcntl(sock, F_GETFL);
 	if (opts < 0)
 	{
-		snprintf(log_str_buf, LOG_STR_BUF_LEN, "fcntl(sock=%d,GETFL).\n", sock);
-		LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+		LOG_INFO(LOG_LEVEL_ERROR, "fcntl(sock=%d,GETFL).\n", sock);
 		return (-1);
 	}
 	opts = opts | O_NONBLOCK;
 	if (fcntl(sock, F_SETFL, opts) < 0)
 	{
-		snprintf(log_str_buf, LOG_STR_BUF_LEN, "fcntl(sock=%d,GETFL).\n", sock);
-		LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+		LOG_INFO(LOG_LEVEL_ERROR, "fcntl(sock=%d,GETFL).\n", sock);
 		return (-1);
 	}
 	return 1;
@@ -176,8 +160,7 @@ static void *accept_thread(void *arg)
 	serveraddr.sin_family = AF_INET;
 	if (-1 == bind(listen_fd, (struct sockaddr *)&serveraddr, sizeof(serveraddr))) // SOCKET_ERROR
 	{
-		snprintf(log_str_buf, LOG_STR_BUF_LEN, "bind config port %d error.\n", /*config_info.port*/port);
-		LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+		LOG_INFO(LOG_LEVEL_ERROR, "bind config port %d error.\n", /*config_info.port*/port);		
 		printf("bind config port %d error.\n", /*config_info.port*/port);
 		return NULL;
 	}
@@ -193,8 +176,8 @@ static void *accept_thread(void *arg)
 			{
 				if ((errno != EAGAIN) && (errno != ECONNABORTED) && (errno != EPROTO) && (errno != EINTR))
 				{
-					snprintf(log_str_buf, LOG_STR_BUF_LEN, "accept error %d,%s.\n", errno, strerror(errno));
-					LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+					LOG_INFO(LOG_LEVEL_ERROR,  "accept error %d,%s.\n", errno, strerror(errno));
+					
 				}
 				continue;
 			}
@@ -202,8 +185,7 @@ static void *accept_thread(void *arg)
 		else
 		{
 			sleep(1);
-			snprintf(log_str_buf, LOG_STR_BUF_LEN, "current accept number achieve to maximum(%d) .\n", MAX_EVENTS);
-			LOG_INFO(LOG_LEVEL_INDISPENSABLE, log_str_buf);
+			LOG_INFO(LOG_LEVEL_INDISPENSABLE, "current accept number achieve to maximum(%d) .\n", MAX_EVENTS);
 			continue;
 		}
 		epoll_connect_event_index = get_epoll_connect_free_event_index();
@@ -221,8 +203,7 @@ static void *accept_thread(void *arg)
 		// set connect fd non blocking
 		if (set_non_blocking(connect_fd) < 0)
 		{
-			snprintf(log_str_buf, LOG_STR_BUF_LEN, "set non-blocking socket = %d error.\n", connect_fd);
-			LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+			LOG_INFO(LOG_LEVEL_ERROR, "set non-blocking socket = %d error.\n", connect_fd);
 			if (connect_fd != -1)
 			{
 				closesocket(connect_fd);
@@ -233,8 +214,7 @@ static void *accept_thread(void *arg)
 		err = setsockopt(connect_fd, SOL_SOCKET, SO_RCVBUF, (char *)(&bufsize), sizeof(int));
 		if (0 != err)
 		{
-			snprintf(log_str_buf, LOG_STR_BUF_LEN, "set socket(%d) setsockopt SO_RCVBUF error.\n", connect_fd);
-			LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+			LOG_INFO(LOG_LEVEL_ERROR, "set socket(%d) setsockopt SO_RCVBUF error.\n", connect_fd);
 			if (connect_fd != -1)
 			{
 				closesocket(connect_fd);
@@ -248,8 +228,8 @@ static void *accept_thread(void *arg)
 		ev.events = EPOLLIN | EPOLLET; // set epoll event type
 		if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, connect_fd, &ev) == -1)
 		{
-			snprintf(log_str_buf, LOG_STR_BUF_LEN, "EPOLL_CTL_ADD %d,%s.\n", errno, strerror(errno));
-			LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+			LOG_INFO(LOG_LEVEL_ERROR, "EPOLL_CTL_ADD %d,%s.\n", errno, strerror(errno));
+			
 			if (connect_fd != -1)
 			{
 				closesocket(connect_fd);
@@ -258,10 +238,10 @@ static void *accept_thread(void *arg)
 			continue;
 		}
 		connect_total_count_add(1);
-		snprintf(log_str_buf, LOG_STR_BUF_LEN, 
+		LOG_INFO(LOG_LEVEL_INDISPENSABLE, 
 			"Epoll event[%d] *****connected from %s*****, fd:%d, Total number of clients currently connected = %d.\n", 
 			epoll_connect_event_index,inet_ntoa(clientaddr.sin_addr), connect_fd, current_connected_total);
-		LOG_INFO(LOG_LEVEL_INDISPENSABLE, log_str_buf);
+		
 	}
 	if (-1 != listen_fd) // out the while then close the socket
 	{
@@ -279,19 +259,20 @@ static int create_accept_task(void)
 
 static int recv_buffer_from_fd(int socket_fd, char *recv_buffer, int *recv_length)
 {
+	
+#define BUFLEN 1024
 	int rev = -1;
-	int one_time_need_read = 1024;
 	int read_continue = 1;
-	int total_recv_length = 0, one_time_recv_lenght = 0;
+	int total_recv_length = 0, len = 0;
 	while (read_continue)
 	{
-		one_time_recv_lenght = recv(socket_fd, &recv_buffer[total_recv_length], one_time_need_read, 0);
-		if (one_time_recv_lenght > 0)
+		len = recv(socket_fd, &recv_buffer[total_recv_length], BUFLEN, 0);
+		if (len > 0)
 		{
-			total_recv_length += one_time_recv_lenght;
+			total_recv_length += len;
 		}
 
-		if (one_time_recv_lenght < 0) // error
+		if (len < 0) // error
 		{
 //			if (errno == EAGAIN)
 //			{
@@ -302,7 +283,7 @@ static int recv_buffer_from_fd(int socket_fd, char *recv_buffer, int *recv_lengt
 			rev = -1;
 			break;
 		}
-		else if (one_time_recv_lenght >= 0 && one_time_recv_lenght < one_time_need_read) // read over
+		else if (len >= 0 && len < BUFLEN) // read over
 		{
 			read_continue = 0;
 			rev = 0;
@@ -324,7 +305,6 @@ static int send_buffer_to_fd(int socket, unsigned char *pucBuf, int iLen)
 {
 	int n;
 	int nwrite;
-	char log_str_buf[LOG_STR_BUF_LEN];
 
 	n = iLen;
 
@@ -337,14 +317,12 @@ static int send_buffer_to_fd(int socket, unsigned char *pucBuf, int iLen)
 			{
 				if (errno != EAGAIN)
 				{
-					snprintf(log_str_buf, LOG_STR_BUF_LEN, "Write.\n");
-					LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+					LOG_INFO(LOG_LEVEL_ERROR, "Write.\n");
 					return 0;
 				}
 				else
 				{
-					snprintf(log_str_buf, LOG_STR_BUF_LEN, "Write EAGAIN.\n");
-					LOG_INFO(LOG_LEVEL_INFO, log_str_buf);
+					LOG_INFO(LOG_LEVEL_INFO, "Write EAGAIN.\n");
 				}
 			}
 		}
@@ -365,8 +343,8 @@ static void dumpInfo(unsigned char *info, int length)
 	{
 		sprintf(&buffer[j],"%02x",info[index]);
 	}
-	snprintf(log_str_buf, LOG_STR_BUF_LEN, "dump info length = %d, %s\n", length, buffer);
-	LOG_INFO(LOG_LEVEL_INDISPENSABLE, log_str_buf);
+	LOG_INFO(LOG_LEVEL_INDISPENSABLE, "dump info length = %d, %s\n", length, buffer);
+	
 }
 
 
@@ -383,8 +361,7 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 	{
 		int mactched_event_index = get_matched_event_index_by_fd(sockfd);
 		connect_total_count_sub(1);
-		snprintf(log_str_buf, LOG_STR_BUF_LEN, "send data to stb over then close the socket(%d), *****client addr(%s)***** , thread_index = %d.\n", sockfd, get_client_addr_by_index(mactched_event_index), thread_index);
-		LOG_INFO(LOG_LEVEL_INDISPENSABLE, log_str_buf);
+		LOG_INFO(LOG_LEVEL_INDISPENSABLE, "send data to stb over then close the socket(%d), *****client addr(%s)***** , thread_index = %d.\n", sockfd, get_client_addr_by_index(mactched_event_index), thread_index);
 		free_event_by_index(mactched_event_index);
 		closesocket(sockfd);
 		sockfd = -1;
@@ -404,13 +381,13 @@ void recycle_timeout_confd(thpool_t* thpool,time_t now, struct epoll_event *ev)
 		{
 			if ((now - get_event_connect_time_by_index(index)) > SERVER_TIMEOUT)
 			{
-				snprintf(log_str_buf, LOG_STR_BUF_LEN, "Epoll event[%d] timeout closed and fd= %d.\n", index, connect_socket_fd_temp);
-				LOG_INFO(LOG_LEVEL_INDISPENSABLE, log_str_buf);
+				LOG_INFO(LOG_LEVEL_INDISPENSABLE, "Epoll event[%d] timeout closed and fd= %d.\n", index, connect_socket_fd_temp);
+				
 				free_event_by_index(index);
 				if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, connect_socket_fd_temp, ev) == -1)
 				{
-					snprintf(log_str_buf, LOG_STR_BUF_LEN, "EPOLL_CTL_DEL %d,%s.\n", errno, strerror(errno));
-					LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+					 LOG_INFO(LOG_LEVEL_ERROR, "EPOLL_CTL_DEL %d,%s.\n", errno, strerror(errno));
+					
 				}
 				connect_total_count_sub(1);
 				closesocket(connect_socket_fd_temp);
@@ -421,12 +398,13 @@ void recycle_timeout_confd(thpool_t* thpool,time_t now, struct epoll_event *ev)
 	// delete the pool job time out job
 	delete_pool_job_number = delete_timeout_job(thpool, SERVER_TIMEOUT);
 	connect_total_count_sub(delete_pool_job_number);
-	snprintf(log_str_buf, LOG_STR_BUF_LEN, "pool queque delete job number = %d.\n", delete_pool_job_number);
-	LOG_INFO(LOG_LEVEL_INDISPENSABLE, log_str_buf);
+	
+	LOG_INFO(LOG_LEVEL_INDISPENSABLE, "pool queque delete job number = %d.\n", delete_pool_job_number);
 
 }
 /*******************************************************************/
-
+#define LOGI(lvl, fmt, arg...)\
+printf("[%s %s %d]" #fmt,  __FILE__, __FUNCTION__, __LINE__, ##arg)
 int main(int argc, char *argv[])
 {
 	char log_file_name[128] = {0};
@@ -439,8 +417,10 @@ int main(int argc, char *argv[])
 	int epoll_events_number = 0;
 	int index = 0;
 	int connect_socket_fd_temp = -1;
-	
+	//char npc = "j8kk";
 
+	//printf("[%s %s %d]" npc,  __FILE__, __FUNCTION__, __LINE__);
+	//return 0;
 	if (2 != argc)
 	{
 		printf("please input the port\n");
@@ -472,8 +452,7 @@ int main(int argc, char *argv[])
 	pid_t pidfd = fork();
 	if (pidfd < 0)
 	{
-		snprintf(log_str_buf, LOG_STR_BUF_LEN, "fork failed! errorcode = %d[%s].\n", errno, strerror(errno));
-		LOG_INFO(LOG_LEVEL_FATAL, log_str_buf);
+		LOG_INFO(LOG_LEVEL_FATAL,  "fork failed! errorcode = %d[%s].\n", errno, strerror(errno));
 		log_close();
 		return (-1);
 	}
@@ -492,9 +471,8 @@ int main(int argc, char *argv[])
 	getrlimit(RLIMIT_NOFILE, &rl);
 	fprintf(stderr, "cur:%d\n", (int)rl.rlim_cur);
 	fprintf(stderr, "max:%d\n", (int)rl.rlim_max);
-	snprintf(log_str_buf, LOG_STR_BUF_LEN, "information about rlimit cur:%d max:%d.\n", (int)rl.rlim_cur, (int)rl.rlim_max);
-	LOG_INFO(LOG_LEVEL_INFO, log_str_buf);
-
+	LOG_INFO(LOG_LEVEL_INFO, "information about rlimit cur:%d max:%d.\n", (int)rl.rlim_cur, (int)rl.rlim_max);
+	
 	sleep(1);
 	signal(SIGKILL, signal_handler_reboot); // register the signal
 	signal(SIGTERM, signal_handler_reboot);
@@ -548,8 +526,7 @@ int main(int argc, char *argv[])
 			// delete epoll event
 			if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[index].data.fd, &ev) == -1)
 			{
-				snprintf(log_str_buf, LOG_STR_BUF_LEN, "EPOLL_CTL_DEL %d,%s.\n", errno, strerror(errno));
-				LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+				LOG_INFO(LOG_LEVEL_ERROR, "EPOLL_CTL_DEL %d,%s.\n", errno, strerror(errno));
 				events[index].data.fd = -1;
 			}
 			if (events[index].events & EPOLLIN) //have read event
@@ -561,19 +538,18 @@ int main(int argc, char *argv[])
 				if (connect_socket_fd_temp < 0)
 				{
 					connect_total_count_sub(1);
-					snprintf(log_str_buf, LOG_STR_BUF_LEN, "Event[%d] read invalid handle.\n", index);
-					LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+					LOG_INFO(LOG_LEVEL_ERROR, "Event[%d] read invalid handle.\n", index);
 					continue;
 				}
 				event_index = get_matched_event_index_by_fd(connect_socket_fd_temp);
-				snprintf(log_str_buf, LOG_STR_BUF_LEN, "Epoll get Event[%d] fd = %d.\n", event_index, connect_socket_fd_temp);
-				LOG_INFO(LOG_LEVEL_INDISPENSABLE, log_str_buf);
+				LOG_INFO(LOG_LEVEL_ERROR, "Epoll get Event[%d] fd = %d.\n", event_index, connect_socket_fd_temp);
+				
 				// no the event
 				if (event_index < 0)
 				{
 					connect_total_count_sub(1);
-					snprintf(log_str_buf, LOG_STR_BUF_LEN, "not find matched fd = %d.\n", connect_socket_fd_temp);
-					LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+					LOG_INFO(LOG_LEVEL_ERROR, "not find matched fd = %d.\n", connect_socket_fd_temp);
+					
 					free_event_by_index(event_index);
 					if (connect_socket_fd_temp != -1)
 					{
@@ -585,8 +561,7 @@ int main(int argc, char *argv[])
 				// receive the buffer from the socket fd
 				if (0 == recv_buffer_from_fd(connect_socket_fd_temp, recv_buffer, &recv_length))
 				{
-					snprintf(log_str_buf, LOG_STR_BUF_LEN, "recv_length = %d, current fd = %d, current job queue job number = %d.\n",recv_length, connect_socket_fd_temp, get_jobqueue_number(thpool));
-					LOG_INFO(LOG_LEVEL_INDISPENSABLE, log_str_buf);
+					LOG_INFO(LOG_LEVEL_INDISPENSABLE, "recv_length = %d, current fd = %d, current job queue job number = %d.\n",recv_length, connect_socket_fd_temp, get_jobqueue_number(thpool));
 					dumpInfo((unsigned char *)recv_buffer, recv_length);
 					// receive buffer success then add the thread pool
 					thpool_add_work(thpool, (void*)respons_stb_info, connect_socket_fd_temp, recv_buffer);
@@ -595,8 +570,7 @@ int main(int argc, char *argv[])
 				{
 					// receive buffer error
 					connect_total_count_sub(1);
-					snprintf(log_str_buf, LOG_STR_BUF_LEN, "Epoll event[%d] not read data, and the socket fd = %d.\n", event_index, connect_socket_fd_temp);
-					LOG_INFO(LOG_LEVEL_INDISPENSABLE, log_str_buf);
+					LOG_INFO(LOG_LEVEL_INDISPENSABLE, "Epoll event[%d] not read data, and the socket fd = %d.\n", event_index, connect_socket_fd_temp);
 					free_event_by_index(event_index);
 					if (connect_socket_fd_temp != -1)
 					{
@@ -611,8 +585,7 @@ int main(int argc, char *argv[])
 //			}
 			else
 			{
-				snprintf(log_str_buf, LOG_STR_BUF_LEN, "Unknown error! event.data.fd = %d.\n", events[index].data.fd);
-				LOG_INFO(LOG_LEVEL_ERROR, log_str_buf);
+				LOG_INFO(LOG_LEVEL_ERROR, "Unknown error! event.data.fd = %d.\n", events[index].data.fd);
 				connect_total_count_sub(1);
 				if (connect_socket_fd_temp < 0)
 				{

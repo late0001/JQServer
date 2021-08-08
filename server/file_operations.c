@@ -18,7 +18,7 @@ int read_file_to_buff(char *file_path, unsigned long len, char *data)
 	{
 		char log_str_buf[LOG_STR_BUF_LEN];
 		snprintf(log_str_buf, LOG_STR_BUF_LEN, "[%s %s %d] Can't open %s.\n", __FILE__, __FUNCTION__, __LINE__, file_path);
-		log_string(LOG_LEVEL_ERROR, log_str_buf);
+		log_s(LOG_LEVEL_ERROR, log_str_buf);
 		return -1;
 	}
 
