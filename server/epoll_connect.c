@@ -11,24 +11,32 @@
 static char log_str_buf[LOG_STR_BUF_LEN];
 static EPOLL_CONNECT epoll_connect_client[MAX_EVENTS];
 
-static void lock_event_state(int iEvent, int iLock)
+
+
+static void event_state_lock(int iEvent)
 {
 	int iRet;
-
-	if (iLock)
-	{
-		iRet = pthread_mutex_lock(&epoll_connect_client[iEvent].mutex);
-	}
-	else
-	{
-		iRet = pthread_mutex_unlock(&epoll_connect_client[iEvent].mutex);
-	}
+	
+	iRet = pthread_mutex_lock(&epoll_connect_client[iEvent].mutex);
+	
 	if (iRet != 0)
 	{
-		snprintf(log_str_buf, LOG_STR_BUF_LEN, "Event[%d] mutex Lock[%d]\n", iEvent, iLock);
-		log_s(LOG_LEVEL_ERROR, log_str_buf);
+		LOG_INFO(LOG_LEVEL_ERROR, "Event[%d] mutex lock\n", iEvent);
 	}
 }
+
+static void event_state_unlock(int iEvent)
+{
+	int iRet;
+	
+	iRet = pthread_mutex_unlock(&epoll_connect_client[iEvent].mutex);
+	
+	if (iRet != 0)
+	{
+		LOG_INFO(LOG_LEVEL_ERROR, "Event[%d] mutex unlock\n", iEvent);
+	}
+}
+
 
 void init_epoll_connect(void)
 {
@@ -63,18 +71,19 @@ int get_epoll_connect_free_event_index(void)
 	return (-1);
 }
 
-void init_epoll_connect_by_index(int iEvent, int iConnectFD, char *uiClientIP)
+void init_epoll_connect_by_index(int iEvent, int iConnectFD, char *uiClientIP, int cliPort)
 {
 	time_t now;
 
 	time(&now);
-	lock_event_state(iEvent, 1);
+	event_state_lock(iEvent);
 	epoll_connect_client[iEvent].now = now;
 	memset(epoll_connect_client[iEvent].client_ip_addr, 0, IP_ADDR_LENGTH);
 	memcpy(epoll_connect_client[iEvent].client_ip_addr, uiClientIP, IP_ADDR_LENGTH);
+	epoll_connect_client[iEvent].client_port = cliPort;
 	epoll_connect_client[iEvent].connect_fd = iConnectFD;
 	epoll_connect_client[iEvent].socket_status = 1;
-	lock_event_state(iEvent, 0);
+	event_state_unlock(iEvent);
 }
 
 int get_matched_event_index_by_fd(int iConnectFD)
@@ -95,10 +104,10 @@ void free_event_by_index(int index)
 {
 	if (index >=0 && index < MAX_EVENTS)
 	{
-		lock_event_state(index, 1);
+		event_state_lock(index);
 		epoll_connect_client[index].connect_fd = -1;
 		epoll_connect_client[index].socket_status = 0;
-		lock_event_state(index, 0);
+		event_state_unlock(index);
 	}
 }
 
@@ -139,4 +148,17 @@ char *get_client_addr_by_index(int index)
 		return "0.0.0.0";
 	}
 }
+
+int get_client_port_by_index(int index)
+{
+	if (index >=0 && index < MAX_EVENTS)
+	{
+		return epoll_connect_client[index].client_port;
+	}
+	//else
+	//{
+		return -1;
+	//}
+}
+
 

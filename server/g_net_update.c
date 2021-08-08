@@ -222,7 +222,8 @@ static void *accept_thread(void *arg)
 			}
 			continue;
 		}
-		init_epoll_connect_by_index(epoll_connect_event_index, connect_fd, inet_ntoa(clientaddr.sin_addr));
+		init_epoll_connect_by_index(epoll_connect_event_index,
+			connect_fd, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
 		// add epoll event
 		ev.data.fd = connect_fd;
 		ev.events = EPOLLIN | EPOLLET; // set epoll event type
@@ -240,7 +241,7 @@ static void *accept_thread(void *arg)
 		connect_total_count_add(1);
 		LOG_INFO(LOG_LEVEL_INDISPENSABLE, 
 			"Epoll event[%d] *****connected from %s*****, fd:%d, Total number of clients currently connected = %d.\n", 
-			epoll_connect_event_index,inet_ntoa(clientaddr.sin_addr), connect_fd, current_connected_total);
+			epoll_connect_event_index, inet_ntoa(clientaddr.sin_addr), connect_fd, current_connected_total);
 		
 	}
 	if (-1 != listen_fd) // out the while then close the socket
@@ -350,7 +351,7 @@ static void dumpInfo(unsigned char *info, int length)
 
 void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index)
 {
-	char log_str_buf[LOG_STR_BUF_LEN];
+	
 	char send_buffer[1024] = "I have get you data";
 	int sockfd = parameter->fd;
 	printf("get buffer: %s\n", parameter->recv_buffer);
@@ -359,10 +360,17 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 	// deal with you logic
 	if (sockfd != -1)
 	{
-		int mactched_event_index = get_matched_event_index_by_fd(sockfd);
+		int matched_event_index = get_matched_event_index_by_fd(sockfd);
+		memset(send_buffer, 0, 1024);
+		snprintf(send_buffer,512,"addr:%s port:%d ",
+			get_client_addr_by_index(matched_event_index),
+			get_client_port_by_index(matched_event_index));
+		send_buffer_to_fd(sockfd, send_buffer, strlen(send_buffer));
 		connect_total_count_sub(1);
-		LOG_INFO(LOG_LEVEL_INDISPENSABLE, "send data to stb over then close the socket(%d), *****client addr(%s)***** , thread_index = %d.\n", sockfd, get_client_addr_by_index(mactched_event_index), thread_index);
-		free_event_by_index(mactched_event_index);
+		LOG_INFO(LOG_LEVEL_INDISPENSABLE,
+			"send data to stb over then close the socket(%d), *****client addr(%s)***** , thread_index = %d.\n", 
+			sockfd, get_client_addr_by_index(matched_event_index), thread_index);
+		free_event_by_index(matched_event_index);
 		closesocket(sockfd);
 		sockfd = -1;
 	}

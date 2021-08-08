@@ -21,16 +21,18 @@ typedef struct _epoll_connect_struct_
 	/*********************/
 	/*The Client IP address and PORT : TCP*/
 	char client_ip_addr[IP_ADDR_LENGTH];
+	int client_port;
 	pthread_mutex_t mutex;
 } EPOLL_CONNECT;
 
 void init_epoll_connect(void);
-void init_epoll_connect_by_index(int iEvent, int iConnectFD, char *uiClientIP);
+void init_epoll_connect_by_index(int iEvent, int iConnectFD, char *uiClientIP, int cliPort);
 int get_epoll_connect_free_event_index(void);
 int get_matched_event_index_by_fd(int iConnectFD);
 void free_event_by_index(int index);
 int get_fd_by_event_index(int index);
 time_t get_event_connect_time_by_index(int index);
 char *get_client_addr_by_index(int index);
+int get_client_port_by_index(int index);
 
 #endif /* EPOLL_CONNECT_H_ */
