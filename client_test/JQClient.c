@@ -39,6 +39,10 @@ typedef int BOOL;
 #define	TRUE						(!FALSE)
 #endif
 
+#define CMD_SENDUI 		0xfffe
+#define CMD_GETREMOTE	0xfffd
+#define CMD_HANDSHAKE   0xfffc
+
 
 static void *recv_thread(void *arg)
 {
@@ -54,8 +58,9 @@ static void *recv_thread(void *arg)
 		if(num == -1) break;
 		if (num > 0) // success
 		{
-			printf("connect_total = %d\nrcv buffer: %s\n", connect_total, recv_buffer);
-			connect_total++;
+			//printf("connect_total = %d\nrcv buffer: %s\n", connect_total, recv_buffer+4);
+			//connect_total++;
+			printf("recv buffer: %s\n", recv_buffer+4);
 			
 		}
 	}
@@ -73,8 +78,10 @@ int connect_to_g_net(int port)
 	int socket_fd, err, num, loc;
 	struct sockaddr_in server_addr;
 	int recv_len;
+	int cur_dptr = 0;
 	
-	char send_buffer[1024] = "Hello JQServer";
+	char send_buffer[1024] = {0};//"Hello JQServer";
+	char *greets = "Hello JQServer, I'm linux client";
 
 	// create socket
 	socket_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -87,13 +94,64 @@ int connect_to_g_net(int port)
 	err = connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr));
 	if(err == 0)
 	{
+		
+		cur_dptr = 0;
+		*(int *)send_buffer = CMD_HANDSHAKE;
+		cur_dptr += 4;
+		strncpy(send_buffer+ cur_dptr, greets, strlen(greets));
+		cur_dptr += strlen(greets);
+		send_buffer[cur_dptr]='\0';
+		printf("send handshake: %s\n cur_dptr = %d strlen(send_buffer) = %ld\n", send_buffer+4, cur_dptr, strlen(send_buffer));
 		// send
-		num = write(socket_fd, (char *)send_buffer, strlen(send_buffer));
+		num = write(socket_fd, (char *)send_buffer, cur_dptr+1);
 		if (num <= 0) {
 			printf("send error\n");
 			return -1;
 		}
+		
 		err = pthread_create(&accep_thread_t, NULL, recv_thread, &socket_fd);
+		
+		memset(send_buffer, 0 , 1024);
+		cur_dptr = 0;
+		*(int *)send_buffer = CMD_SENDUI;
+		cur_dptr += 4;
+		strcpy(send_buffer + cur_dptr, "123456798");
+		cur_dptr += 9;
+		strcpy(send_buffer + cur_dptr, "WiGeWd");
+		cur_dptr += 6;
+		send_buffer[cur_dptr]='\0';
+		// send
+		num = write(socket_fd, (char *)send_buffer, cur_dptr+1);
+		if (num <= 0) {
+			printf("send error\n");
+			return -1;
+		}
+		while(1) {
+			char ch=getchar();
+			if(ch == 'q') break;
+				
+			switch(ch){
+			case 'g':
+				memset(send_buffer, 0 , 1024);
+				cur_dptr = 0;
+				//get remote client ip and port
+				*(int *)send_buffer = CMD_GETREMOTE;
+				cur_dptr += 4;
+				strcpy(send_buffer + cur_dptr, "876543210");
+				cur_dptr += 9;
+				strcpy(send_buffer + cur_dptr, "CiGeWK");
+				cur_dptr += 6;
+				send_buffer[cur_dptr]='\0';
+				num = write(socket_fd, (char *)send_buffer, cur_dptr +1);
+				break;
+			
+			default:
+				break;
+				
+			}
+			
+		}
+		
 		
 	}
 	else
@@ -130,16 +188,12 @@ int main()
 	
 
 	// simulation connect 3 times
-	for(index = 0; index < 10; index++)
+	for(index = 0; index < 1; index++)
 	{
 		temp = connect_to_g_net(port);
 	}
 	
-	while(1) {
-		char ch=getchar();
-		if(ch== 'q')
-			break;
-	}
+	
 	 
 	return 0;
 	

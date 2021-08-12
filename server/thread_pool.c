@@ -11,7 +11,7 @@
 static void thpool_thread_do(thpool_thread_parameter* tp_p);
 static int thpool_jobqueue_init(thpool_t* tp_p);
 static int thpool_jobqueue_removelast(thpool_t* tp_p);
-static void thpool_jobqueue_add(thpool_t *tp_p, thpool_job_t *newjob_p);
+static void thpool_job_enqueue(thpool_t *tp_p, thpool_job_t *newjob_p);
 static thpool_job_t* thpool_jobqueue_peek(thpool_t* tp_p);
 static void thpool_jobqueue_empty(thpool_t* tp_p);
 
@@ -184,8 +184,8 @@ static int thpool_jobqueue_removelast(thpool_t* tp_p)
     sem_getvalue(tp_p->jobqueue->queueSem, &reval);
     return 0;
 }
-
-static void thpool_jobqueue_add(thpool_t *tp_p, thpool_job_t *newjob_p)
+/* 头插法: 往头节点前插*/
+static void thpool_job_enqueue(thpool_t *tp_p, thpool_job_t *newjob_p)
 {
 	int reval = 0;
     thpool_job_t *oldFirstJob = tp_p->jobqueue->head;
@@ -212,7 +212,7 @@ static void thpool_jobqueue_add(thpool_t *tp_p, thpool_job_t *newjob_p)
 }
 
 // add to thread pool
-int thpool_add_work(thpool_t* tp_p, void *(*function_p)(void* arg, int index), 
+int thpool_add_work(thpool_t* tp_p, void *(*func)(void* arg, int index), 
 /*void *arg_p*/int socket_fd, char *recev_buffer)
 {
     thpool_job_t *newjob  = (thpool_job_t*) malloc(sizeof(thpool_job_t));
@@ -224,13 +224,13 @@ int thpool_add_work(thpool_t* tp_p, void *(*function_p)(void* arg, int index),
         fprintf(stderr, "thpool_add_work(): Could not allocate memory for new job\n");
         return -1;
     }
-    newjob ->function = function_p;
-    newjob->job_add_time = now;
+    newjob->function = func;
+    newjob->job_create_time = now;
 //    newjob ->arg      = arg_p;
     memcpy(newjob->arg.recv_buffer, recev_buffer, BUFFER_SIZE);
     newjob->arg.fd = socket_fd;
     pthread_mutex_lock(&mutex);
-    thpool_jobqueue_add(tp_p, newjob);
+    thpool_job_enqueue(tp_p, newjob);
     pthread_mutex_unlock(&mutex);
 
     return 0;
@@ -280,7 +280,7 @@ int delete_timeout_job(thpool_t* tp_p, int time_out)
 			{
 				break;
 			}
-			if (now - curjob->job_add_time > time_out)
+			if (now - curjob->job_create_time > time_out)
 			{
 				tp_p->jobqueue->tail = curjob->prev;
 				free (curjob);

@@ -11,7 +11,7 @@
 #include "thread_pool.h"
 #include "g_net_update.h"
 #include "database_process.h"
-
+#include "customized_cmd.h"
 
 #define	CONNECT_TO_SQL_SUCCESS							0
 #define SERVER_TIMEOUT									60 * 1 //60S
@@ -351,21 +351,88 @@ static void dumpInfo(unsigned char *info, int length)
 
 void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index)
 {
-	
-	char send_buffer[1024] = "I have get you data";
+	char *recv_buffer;
+	char send_buffer[1024] = {0};
 	int sockfd = parameter->fd;
-	printf("get buffer: %s\n", parameter->recv_buffer);
-	printf("sockfd = %d\n", sockfd);
-	send_buffer_to_fd(sockfd, send_buffer, strlen(send_buffer));
+	int index = 0, j = 0;
+	int cmd;
+	int dptr = 0;
+	recv_buffer = parameter->recv_buffer;
+	printf("sockfd: %d\n", sockfd);
+	printf("get command: 0x%x \n", *(int *)recv_buffer);
+	printf("get buffer: %s \n", recv_buffer+4);
+	
+	
+	//send_buffer_to_fd(sockfd, send_buffer, strlen(send_buffer));
+	
 	// deal with you logic
 	if (sockfd != -1)
 	{
 		int matched_event_index = get_matched_event_index_by_fd(sockfd);
-		memset(send_buffer, 0, 1024);
-		snprintf(send_buffer,512,"addr:%s port:%d ",
-			get_client_addr_by_index(matched_event_index),
-			get_client_port_by_index(matched_event_index));
-		send_buffer_to_fd(sockfd, send_buffer, strlen(send_buffer));
+		//for (index = 0; index < 2; index++, j+=2)
+		//{
+		//sprintf(&recv_buf[j], "%02x", recv_buffer[index]);
+		//}
+		cmd = *(int *)recv_buffer;
+		printf("222 cmd = 0x%x\n", cmd);
+		switch(cmd){
+			case CMD_SENDUI:
+				{
+				EPOLL_CONNECT *pCon = get_connect_prv_by_index(matched_event_index);
+				strncpy(pCon->UsrhashId, recv_buffer+4 , 9);
+				strncpy(pCon->passwd, recv_buffer+13, 6);
+				
+				}
+				break;
+			case CMD_GETREMOTE: //get address and port of remote host
+				{
+				char UsrHashId[9]={0};
+				char Pass[6]={0};
+				int ev_idx= -1;
+				memset(send_buffer, 0, 1024);
+				strncpy(UsrHashId, recv_buffer+4 , 9);
+				strncpy(Pass, recv_buffer+13, 6);
+				ev_idx = get_matched_event_index_by_UsrHashId(UsrHashId);
+				if(ev_idx == -1) {
+					LOG_INFO(LOG_LEVEL_WARNING, "Not Found client event index,  may be caused by the client being offline");
+					dptr = 0;
+					*(int *)send_buffer = CMD_GETREMOTE;
+					dptr += 4;
+					snprintf(send_buffer + dptr, 512, "Not Found client event index,  may be caused by the client being offline");
+					dptr += 512;
+					send_buffer_to_fd(sockfd, send_buffer, dptr+1);
+					break;
+				}
+				EPOLL_CONNECT *pCon = get_connect_prv_by_index(ev_idx);
+				dptr = 0;
+				memset(send_buffer, 0, 1024);
+				*(int *)send_buffer = CMD_GETREMOTE;
+				dptr += 4;
+				snprintf(send_buffer+dptr, 512, "clientIp:%s clientPort:%d", pCon->client_ip_addr, pCon->client_port);
+				dptr += 512;
+				send_buffer_to_fd(sockfd, send_buffer, dptr+1);
+				break;
+				}
+			case CMD_HANDSHAKE:
+				{
+				dptr = 0;
+				printf("get msg : %s\n", recv_buffer+4);
+				memset(send_buffer, 0, 1024);
+				//strcpy(send_buffer, "I have get you data");
+				*(int *)send_buffer = CMD_HANDSHAKE;
+				dptr += 4;
+				snprintf(send_buffer+ dptr, 512, "addr:%s port:%d ",
+					get_client_addr_by_index(matched_event_index),
+					get_client_port_by_index(matched_event_index));
+				dptr +=  strlen(send_buffer + dptr);
+				send_buffer_to_fd(sockfd, send_buffer, dptr+1);
+				break;
+				}
+			default:
+				break;
+		}
+		
+#if 0
 		connect_total_count_sub(1);
 		LOG_INFO(LOG_LEVEL_INDISPENSABLE,
 			"send data to stb over then close the socket(%d), *****client addr(%s)***** , thread_index = %d.\n", 
@@ -373,6 +440,9 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 		free_event_by_index(matched_event_index);
 		closesocket(sockfd);
 		sockfd = -1;
+#endif
+	}else{
+		printf("2222 sockfd = %d\n", sockfd);
 	}
 
 }
@@ -389,6 +459,7 @@ void recycle_timeout_confd(thpool_t* thpool,time_t now, struct epoll_event *ev)
 		{
 			if ((now - get_event_connect_time_by_index(index)) > SERVER_TIMEOUT)
 			{
+				printf("Epoll event[%d] timeout closed and fd= %d.\n", index, connect_socket_fd_temp);
 				LOG_INFO(LOG_LEVEL_INDISPENSABLE, "Epoll event[%d] timeout closed and fd= %d.\n", index, connect_socket_fd_temp);
 				
 				free_event_by_index(index);
@@ -524,6 +595,7 @@ int main(int argc, char *argv[])
 		time(&now);
 		if (abs(now - eventTime) >= SERVER_TIMEOUT) //SERVER_TIMEOUT second detect one time delete the time out event
 		{
+			//printf("60s detect one time =====>\n");
 			eventTime = now;
 			recycle_timeout_confd(thpool, now, &ev);
 		}
@@ -532,11 +604,13 @@ int main(int argc, char *argv[])
 		{
 			connect_socket_fd_temp = events[index].data.fd; // get the socket fd
 			// delete epoll event
+			#if 0
 			if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[index].data.fd, &ev) == -1)
 			{
 				LOG_INFO(LOG_LEVEL_ERROR, "EPOLL_CTL_DEL %d,%s.\n", errno, strerror(errno));
 				events[index].data.fd = -1;
 			}
+			#endif
 			if (events[index].events & EPOLLIN) //have read event
 			{
 				int event_index = -1;

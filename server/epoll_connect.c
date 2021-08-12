@@ -100,6 +100,21 @@ int get_matched_event_index_by_fd(int iConnectFD)
 	return (-1);
 }
 
+int get_matched_event_index_by_UsrHashId(char *UsrHashId)
+{
+	int iIndex;
+
+	for (iIndex = 0; iIndex < MAX_EVENTS; iIndex++)
+	{
+		if (!strncmp(epoll_connect_client[iIndex].UsrhashId, UsrHashId, 9))
+		{
+			return iIndex;
+		}
+	}
+	return (-1);
+}
+
+
 void free_event_by_index(int index)
 {
 	if (index >=0 && index < MAX_EVENTS)
@@ -159,6 +174,17 @@ int get_client_port_by_index(int index)
 	//{
 		return -1;
 	//}
+}
+
+EPOLL_CONNECT *get_connect_prv_by_index(int index)
+{
+	if (index >=0 && index < MAX_EVENTS)
+	{
+		return &epoll_connect_client[index];
+	}
+
+	return NULL;
+
 }
 
 

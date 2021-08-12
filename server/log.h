@@ -12,7 +12,8 @@ enum{
  LOG_LEVEL_FATAL,			//(0x02)
  LOG_LEVEL_ERROR,			//(0x03)
  LOG_LEVEL_WARNING,			//(0x04)
- LOG_LEVEL_INFO,			//(0x05)
+ LOG_LEVEL_DEBUG,           //(0x05)
+ LOG_LEVEL_INFO,			//(0x06)
 };
 
 #define LOG_STR_BUF_LEN		512//256
