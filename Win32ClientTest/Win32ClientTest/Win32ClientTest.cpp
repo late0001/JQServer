@@ -39,9 +39,12 @@ void  CALLBACK TimeProc(HWND hwnd, UINT message, UINT_PTR idTimer, DWORD dwTime)
 	*(int *)send_buffer = CMD_HEARTBEAT;
 	cur_dptr += 4;
 	send_buffer[cur_dptr] = '\0';
-	if(sockSrvInTimer)
+	if (sockSrvInTimer) {
 		send(sockSrvInTimer, send_buffer, cur_dptr + 1, 0);
-	printf("thread send heartbeat \n");
+	}else {
+		printf("socket fd have lost! \n");
+	}
+	//printf("thread send heartbeat \n");
 }
 
 //Ïß³Ì  //CALLBACK
@@ -147,7 +150,7 @@ int main()
 
 	_beginthread(recv_func, NULL, &sockClient);
 	Sleep(5);
-	//fixme
+	//send self information
 	ConstructSendUIPkt(send_buffer, &pktlen, "876543210", "CiGeWK");
 	//cout << "Send userInfo!\n";
 	//cout << "Send len "<< cur_dptr <<endl;
