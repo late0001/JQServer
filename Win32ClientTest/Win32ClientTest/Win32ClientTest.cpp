@@ -1,7 +1,7 @@
 // Win32ClientTest.cpp : 定义控制台应用程序的入口点。
 //
-
 #include "stdafx.h"
+#define SRV_IPADDR "172.29.11.221" //"192.168.0.109"
 #define CMD_SENDUI 		0xfffe
 #define CMD_GETREMOTE	0xfffd
 #define CMD_HANDSHAKE   0xfffc
@@ -70,6 +70,48 @@ unsigned  CALLBACK heartbeat_proc(PVOID arg)
 	return 0;
 }
 
+int ConstructHandShakePkt(char *buf, int *pktlen, const char *greets)
+{
+	int cur_dptr = 0;
+	memset(buf, 0, 512);
+	*(int *)buf = CMD_HANDSHAKE;
+	strncpy(buf + 4, greets, strlen(greets));
+	cur_dptr += 4 + strlen(greets);
+	buf[cur_dptr] = '\0';
+
+	return 0;
+}
+
+int ConstructSendUIPkt(char *buf, int *pktlen,const char *userId, const char *passwd)
+{
+	int cur_dptr = 0;
+	memset(buf, 0, 512);
+	*(int *)buf = CMD_SENDUI;
+	cur_dptr += 4;
+	strncpy(buf + cur_dptr, userId, 9);
+	cur_dptr += 9;
+	strncpy(buf + cur_dptr, passwd, 6);
+	cur_dptr += 6;
+	buf[cur_dptr] = '\0';
+	*pktlen = cur_dptr + 1;
+
+	return 0;
+}
+
+int ConstructGetRemotePkt(char *buf, int *pktlen, const char *userId, const char *passwd)
+{
+	int cur_dptr = 0;
+	memset(buf, 0, 512);
+	*(int *)buf = CMD_GETREMOTE;
+	cur_dptr += 4;
+	strncpy(buf + cur_dptr, userId, 9);
+	cur_dptr += 9;
+	strncpy(buf + cur_dptr, passwd, 6);
+	cur_dptr += 6;
+	buf[cur_dptr] = '\0';
+	*pktlen = cur_dptr + 1;
+	return 0;
+}
 int main()
 {
 	WORD wVersionRequested;
@@ -88,41 +130,30 @@ int main()
 	}
 	SOCKET sockClient = socket(AF_INET, SOCK_STREAM, 0);//建立套接字
 	SOCKADDR_IN addrSrv;
-	//inet_pton(AF_INET, "192.168.0.109", &addrSrv.sin_addr);
-	inet_pton(AF_INET, "172.29.11.221", &addrSrv.sin_addr);
+	inet_pton(AF_INET, SRV_IPADDR, &addrSrv.sin_addr);
 	//addrSrv.sin_addr.S_un.S_addr = inet_addr("127.0.0.1"); "49.152.49.84");
 	addrSrv.sin_family = AF_INET;
 	addrSrv.sin_port = htons(8812);
 	err = connect(sockClient, (SOCKADDR*)&addrSrv, sizeof(SOCKADDR));//连接到目的主机
-	if (err == SOCKET_ERROR) printf("Socket error\n");
+	if (err == SOCKET_ERROR) 
+		printf("Socket error\n");
 	char recvBuf[100];
 	char send_buffer[1024] = { 0 };//"Hello JQServer";
 	char *greets = "Hello JQServer! I'm windows client";
-	int cur_dptr = 0;
-	*(int *)send_buffer = CMD_HANDSHAKE;
-	strncpy(send_buffer + 4, greets, strlen(greets));
-	cur_dptr += 4 + strlen(greets);
-	send_buffer[cur_dptr] = '\0';
-	cout <<"Send handshake!\n";
-	send(sockClient, send_buffer, cur_dptr + 1, 0);
+	int pktlen = 0;
+	ConstructHandShakePkt(send_buffer, &pktlen, greets);
+	printf("Send handshake!\n");
+	send(sockClient, send_buffer, pktlen, 0);
 
 	_beginthread(recv_func, NULL, &sockClient);
 	Sleep(5);
-	memset(send_buffer, 0, 512);
-	cur_dptr = 0;
-	*(int *)send_buffer = CMD_SENDUI;
-	cur_dptr += 4;
-	strcpy(send_buffer + cur_dptr, "876543210");
-	cur_dptr += 9;
-	strcpy(send_buffer + cur_dptr, "CiGeWK");
-	cur_dptr += 6;
-	send_buffer[cur_dptr] = '\0';
-	
+	//fixme
+	ConstructSendUIPkt(send_buffer, &pktlen, "876543210", "CiGeWK");
 	//cout << "Send userInfo!\n";
 	//cout << "Send len "<< cur_dptr <<endl;
 	printf("Send user info\n");
-	printf("Send len %d\n", cur_dptr+1);
-	if (SOCKET_ERROR == send(sockClient, send_buffer, cur_dptr+1, 0)) {
+	printf("Send len %d\n", pktlen);
+	if (SOCKET_ERROR == send(sockClient, send_buffer, pktlen, 0)) {
 		printf("Error code: %d", WSAGetLastError());
 	}
 	printf("sockfd: %ld\n", sockClient);
@@ -168,16 +199,8 @@ int main()
 		switch (ch) {	
 		case 'g':
 			printf("Send command to get remote address\n");
-			memset(send_buffer, 0, 512);
-			cur_dptr = 0;
-			*(int *)send_buffer = CMD_GETREMOTE;
-			cur_dptr += 4;
-			strcpy(send_buffer + cur_dptr, "123456798");
-			cur_dptr += 9;
-			strcpy(send_buffer + cur_dptr, "WiGeWd");
-			cur_dptr += 6;
-			send_buffer[cur_dptr] = '\0';
-			send(sockClient, send_buffer, cur_dptr + 1, 0);
+			ConstructGetRemotePkt(send_buffer, &pktlen, "123456798", "WiGeWd");
+			send(sockClient, send_buffer, pktlen, 0);
 			break;
 		default:
 				break;
