@@ -1,12 +1,12 @@
 /*
  * thread_pool.c
  *
- *  Created on: 2015��2��4��
+ *  Created on: 20210820
  *      Author: vae
  */
 #include "thread_pool_global.h"
 #include "thread_pool.h"
-
+#include "epoll_connect.h"
 
 static void thpool_thread_do(thpool_thread_parameter* tp_p);
 static int thpool_jobqueue_init(thpool_t* tp_p);
@@ -213,12 +213,13 @@ static void thpool_job_enqueue(thpool_t *tp_p, thpool_job_t *newjob_p)
 
 // add to thread pool
 int thpool_add_work(thpool_t* tp_p, void *(*func)(void* arg, int index), 
-/*void *arg_p*/int socket_fd, char *recev_buffer)
+/*void *arg_p*/int event_index, int socket_fd, char *recev_buffer)
 {
     thpool_job_t *newjob  = (thpool_job_t*) malloc(sizeof(thpool_job_t));
     time_t now;
 
     time(&now);
+	update_time_by_index(event_index, now);
     if(newjob == NULL)
     {
         fprintf(stderr, "thpool_add_work(): Could not allocate memory for new job\n");

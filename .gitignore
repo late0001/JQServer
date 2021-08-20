@@ -1,2 +1,7 @@
+Debug/
 *.o
 *.exe
+*.ipch
+*.sdf
+*.opensdf
+*.suo

@@ -1,7 +1,7 @@
 /*
  * epoll_connect.c
  *
- *  Created on: 2015锟斤拷2锟斤拷5锟斤拷
+ *  Created on: 20180820
  *      Author: Administrator
  */
 
@@ -98,6 +98,21 @@ int get_matched_event_index_by_fd(int iConnectFD)
 		}
 	}
 	return (-1);
+}
+
+//更新最近一次读socket时间
+int update_time_by_index(int index, time_t now)
+{
+	if (index >=0 && index < MAX_EVENTS)
+	{
+		 epoll_connect_client[index].now = now;
+	}
+	else
+	{
+		return -1;
+	}
+	
+	return (0);
 }
 
 int get_matched_event_index_by_UsrHashId(char *UsrHashId)

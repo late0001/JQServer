@@ -1,7 +1,7 @@
 /*
  * epoll_connect.h
  *
- *  Created on: 2015��2��5��
+ *  Created on: 20210820
  *      Author: Administrator
  */
 
@@ -33,6 +33,7 @@ int get_epoll_connect_free_event_index(void);
 int get_matched_event_index_by_fd(int iConnectFD);
 void free_event_by_index(int index);
 int get_fd_by_event_index(int index);
+int update_time_by_index(int index, time_t now);
 time_t get_event_connect_time_by_index(int index);
 char *get_client_addr_by_index(int index);
 int get_client_port_by_index(int index);

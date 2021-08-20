@@ -5,6 +5,7 @@
 #define CMD_SENDUI 		0xfffe
 #define CMD_GETREMOTE	0xfffd
 #define CMD_HANDSHAKE   0xfffc
+#define CMD_HEARTBEAT   0xfff1 
 //TcpClient.cpp
 #include <stdio.h>
 #include <winsock2.h>
@@ -28,6 +29,47 @@ void recv_func(void *arg)
 	}
 
 }
+
+SOCKET sockSrvInTimer = NULL;
+//定时事件  
+void  CALLBACK TimeProc(HWND hwnd, UINT message, UINT_PTR idTimer, DWORD dwTime)
+{
+	char send_buffer[512] = { 0 };
+	int cur_dptr = 0;
+	*(int *)send_buffer = CMD_HEARTBEAT;
+	cur_dptr += 4;
+	send_buffer[cur_dptr] = '\0';
+	if(sockSrvInTimer)
+		send(sockSrvInTimer, send_buffer, cur_dptr + 1, 0);
+	printf("thread send heartbeat \n");
+}
+
+//线程  //CALLBACK
+//unsigned __stdcall heartbeat_proc(void *pvoid)
+unsigned  CALLBACK heartbeat_proc(PVOID arg)
+{
+	//强制系统为线程建立消息队列  
+	MSG msg;
+	PeekMessage(&msg, NULL, WM_USER, WM_USER, PM_NOREMOVE);
+	sockSrvInTimer = *(SOCKET *)arg;
+	//设置定时器  
+	SetTimer(NULL, 10, 500, TimeProc);
+	//获取并分发消息  
+	while (GetMessage(&msg, NULL, 0, 0))
+	{
+		if (msg.message == WM_TIMER)
+		{
+			
+			TranslateMessage(&msg);    // 翻译消息  
+			DispatchMessage(&msg);     // 分发消息  
+		}
+	}
+
+	KillTimer(NULL, 10);
+	printf("Heartbeat thread end here\n");
+	return 0;
+}
+
 int main()
 {
 	WORD wVersionRequested;
@@ -76,8 +118,10 @@ int main()
 	cur_dptr += 6;
 	send_buffer[cur_dptr] = '\0';
 	
-	cout << "Send uerInfo!\n";
-	cout << "Send len "<< cur_dptr <<endl;
+	//cout << "Send userInfo!\n";
+	//cout << "Send len "<< cur_dptr <<endl;
+	printf("Send user info\n");
+	printf("Send len %d\n", cur_dptr+1);
 	if (SOCKET_ERROR == send(sockClient, send_buffer, cur_dptr+1, 0)) {
 		printf("Error code: %d", WSAGetLastError());
 	}
@@ -105,6 +149,8 @@ int main()
 		printf("WSAIoctl failed: %d\n", WSAGetLastError());
 		return FALSE;
 	}
+	 _beginthreadex(NULL, NULL, heartbeat_proc, &sockClient,0, NULL );
+
 	//while (true)
 	//{
 

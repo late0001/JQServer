@@ -358,9 +358,12 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 	int cmd;
 	int dptr = 0;
 	recv_buffer = parameter->recv_buffer;
-	printf("sockfd: %d\n", sockfd);
-	printf("get command: 0x%x \n", *(int *)recv_buffer);
-	printf("get buffer: %s \n", recv_buffer+4);
+	cmd = *(int *)recv_buffer;
+	printf("[sockfd: %d] get command: 0x%x \n", sockfd, cmd);
+	if(cmd != CMD_HEARTBEAT){
+		
+		printf("get buffer: %s \n", recv_buffer+4);
+	}
 	
 	
 	//send_buffer_to_fd(sockfd, send_buffer, strlen(send_buffer));
@@ -373,8 +376,7 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 		//{
 		//sprintf(&recv_buf[j], "%02x", recv_buffer[index]);
 		//}
-		cmd = *(int *)recv_buffer;
-		printf("222 cmd = 0x%x\n", cmd);
+
 		switch(cmd){
 			case CMD_SENDUI:
 				{
@@ -595,7 +597,7 @@ int main(int argc, char *argv[])
 		time(&now);
 		if (abs(now - eventTime) >= SERVER_TIMEOUT) //SERVER_TIMEOUT second detect one time delete the time out event
 		{
-			//printf("60s detect one time =====>\n");
+			printf("60s detect one time =====>\n");
 			eventTime = now;
 			recycle_timeout_confd(thpool, now, &ev);
 		}
@@ -646,7 +648,7 @@ int main(int argc, char *argv[])
 					LOG_INFO(LOG_LEVEL_INDISPENSABLE, "recv_length = %d, current fd = %d, current job queue job number = %d.\n",recv_length, connect_socket_fd_temp, get_jobqueue_number(thpool));
 					dumpInfo((unsigned char *)recv_buffer, recv_length);
 					// receive buffer success then add the thread pool
-					thpool_add_work(thpool, (void*)respons_stb_info, connect_socket_fd_temp, recv_buffer);
+					thpool_add_work(thpool, (void*)respons_stb_info, event_index, connect_socket_fd_temp, recv_buffer);
 				}
 				else
 				{
