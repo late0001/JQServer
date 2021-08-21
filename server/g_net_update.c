@@ -359,10 +359,10 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 	int dptr = 0;
 	recv_buffer = parameter->recv_buffer;
 	cmd = *(int *)recv_buffer;
-	printf("[sockfd: %d] get command: 0x%x \n", sockfd, cmd);
+	
 	if(cmd != CMD_HEARTBEAT){
-		
-		printf("get buffer: %s \n", recv_buffer+4);
+		printf("[sockfd: %d] get command: 0x%x \n", sockfd, cmd);
+		printf("[sockfd: %d] get buffer: %s \n",sockfd, recv_buffer+4);
 	}
 	
 	

@@ -44,7 +44,7 @@ void  CALLBACK TimeProc(HWND hwnd, UINT message, UINT_PTR idTimer, DWORD dwTime)
 	}else {
 		printf("socket fd have lost! \n");
 	}
-	//printf("thread send heartbeat \n");
+    //printf("thread send heartbeat \n");
 }
 
 //Ïß³Ì  //CALLBACK
@@ -151,7 +151,7 @@ int main()
 	_beginthread(recv_func, NULL, &sockClient);
 	Sleep(5);
 	//send self information
-	ConstructSendUIPkt(send_buffer, &pktlen, "876543210", "CiGeWK");
+	ConstructSendUIPkt(send_buffer, &pktlen, "123456798", "WiGeWd");
 	//cout << "Send userInfo!\n";
 	//cout << "Send len "<< cur_dptr <<endl;
 	printf("Send user info\n");
@@ -202,7 +202,7 @@ int main()
 		switch (ch) {	
 		case 'g':
 			printf("Send command to get remote address\n");
-			ConstructGetRemotePkt(send_buffer, &pktlen, "123456798", "WiGeWd");
+			ConstructGetRemotePkt(send_buffer, &pktlen, "876543210", "CiGeWK");
 			send(sockClient, send_buffer, pktlen, 0);
 			break;
 		default:
