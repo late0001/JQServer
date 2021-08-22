@@ -6,6 +6,7 @@
  */
 
 #include "log.h"
+#include "proto.h"
 #include "epoll_connect.h"
 
 static char log_str_buf[LOG_STR_BUF_LEN];
@@ -99,6 +100,60 @@ int get_matched_event_index_by_fd(int iConnectFD)
 	}
 	return (-1);
 }
+
+int get_all_users(char *buf, int *outlen)
+{
+	int iIndex;
+	int cnt = 0;
+	struct GetAllUserAckMessage *userList = (struct GetAllUserAckMessage *)buf;
+	struct JQUserNode *userNode = NULL ;
+	if(buf == NULL){
+		for (iIndex = 0; iIndex < MAX_EVENTS; iIndex++)
+		{
+			if (epoll_connect_client[iIndex].connect_fd != -1)
+			{
+				cnt++;
+			}
+		}
+		*outlen = cnt;
+		return 0;
+	}
+	userNode = userList->node ;
+	for (iIndex = 0; iIndex < MAX_EVENTS; iIndex++)
+	{
+		if (epoll_connect_client[iIndex].connect_fd != -1)
+		{
+			userNode[cnt].now = epoll_connect_client[iIndex].now;
+			strcpy(userNode[cnt].client_ip_addr, epoll_connect_client[iIndex].client_ip_addr);
+			userNode[cnt].client_port = epoll_connect_client[iIndex].client_port;
+			strcpy(userNode[cnt].UsrhashId, epoll_connect_client[iIndex].UsrhashId);
+			strcpy(userNode[cnt].passwd, epoll_connect_client[iIndex].passwd);
+			cnt++;
+			
+		}
+	}
+	return 0;
+
+}
+
+int print_all_users(void)
+{
+	int iIndex;
+	printf("Now IP   Port   UserId  Password\n");
+
+	for (iIndex = 0; iIndex < 10; iIndex++)
+	{
+		printf("%ld %s %d %s %s\n",
+			epoll_connect_client[iIndex].now,
+			epoll_connect_client[iIndex].client_ip_addr,
+			epoll_connect_client[iIndex].client_port,
+			epoll_connect_client[iIndex].UsrhashId,
+			epoll_connect_client[iIndex].passwd);
+	}
+	return 0;
+
+}
+
 
 //更新最近一次读socket时间
 int update_time_by_index(int index, time_t now)

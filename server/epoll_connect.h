@@ -22,8 +22,8 @@ typedef struct _epoll_connect_struct_
 	/*The Client IP address and PORT : TCP*/
 	char client_ip_addr[IP_ADDR_LENGTH];
 	int client_port;
-	char UsrhashId[9];
-	char passwd[6];
+	char UsrhashId[10];
+	char passwd[7];
 	pthread_mutex_t mutex;
 } EPOLL_CONNECT;
 
@@ -39,6 +39,8 @@ char *get_client_addr_by_index(int index);
 int get_client_port_by_index(int index);
 EPOLL_CONNECT *get_connect_prv_by_index(int index);
 int get_matched_event_index_by_UsrHashId(char *UsrHashId);
+int get_all_users(char *buf, int *outlen);
+int print_all_users(void);
 
 
 #endif /* EPOLL_CONNECT_H_ */

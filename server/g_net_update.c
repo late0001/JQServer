@@ -11,7 +11,11 @@
 #include "thread_pool.h"
 #include "g_net_update.h"
 #include "database_process.h"
-#include "customized_cmd.h"
+#include "proto.h"
+
+#define true 1
+#define false 0
+#define bool int
 
 #define	CONNECT_TO_SQL_SUCCESS							0
 #define SERVER_TIMEOUT									60 * 1 //60S
@@ -357,12 +361,14 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 	int index = 0, j = 0;
 	int cmd;
 	int dptr = 0;
+	int len = 0;
 	recv_buffer = parameter->recv_buffer;
-	cmd = *(int *)recv_buffer;
+	struct stJQMessage *msgHead = (struct stJQMessage *)recv_buffer;
 	
-	if(cmd != CMD_HEARTBEAT){
-		printf("[sockfd: %d] get command: 0x%x \n", sockfd, cmd);
-		printf("[sockfd: %d] get buffer: %s \n",sockfd, recv_buffer+4);
+	
+	if(msgHead->iMessageType!= CMD_HEARTBEAT){
+		printf("[sockfd: %d] get command: 0x%x \n", sockfd, msgHead->iMessageType);
+		printf("[sockfd: %d] get buffer: %s \n",sockfd, recv_buffer +8);
 	}
 	
 	
@@ -377,58 +383,100 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 		//sprintf(&recv_buf[j], "%02x", recv_buffer[index]);
 		//}
 
-		switch(cmd){
+		switch(msgHead->iMessageType){
+			case CMD_HANDSHAKE:
+				{
+				struct stJQMessage *hdr = (struct stJQMessage *)send_buffer;
+				struct HandshakeMessage *hsMsg = (struct HandshakeMessage *)
+					(recv_buffer + sizeof(struct stJQMessage));
+				printf("get handshake msg : %s\n", hsMsg->greetings);
+				memset(send_buffer, 0, 1024);
+				//strcpy(send_buffer, "I have get you data");
+				struct HandshakeAckMessage *stAck = (struct HandshakeAckMessage *)
+				((char *)hdr +sizeof(struct stJQMessage));
+				hdr->iMessageType = CMD_HANDSHAKE_ACK;
+				snprintf(stAck->info, 256, "addr:%s port:%d ",
+					get_client_addr_by_index(matched_event_index),
+					get_client_port_by_index(matched_event_index));
+				printf("handshake ack: %s\n", stAck->info);
+				len = sizeof(struct stJQMessage) + sizeof(struct HandshakeAckMessage);
+				hdr->iMessageLen = len;
+				send_buffer_to_fd(sockfd, send_buffer, len);
+				break;
+				}
 			case CMD_SENDUI:
 				{
 				EPOLL_CONNECT *pCon = get_connect_prv_by_index(matched_event_index);
-				strncpy(pCon->UsrhashId, recv_buffer+4 , 9);
-				strncpy(pCon->passwd, recv_buffer+13, 6);
-				
+				struct SendUIMessage *sendUIMsg= (struct SendUIMessage *)
+					(recv_buffer + sizeof(struct stJQMessage));
+				strncpy(pCon->UsrhashId, sendUIMsg->userId , sizeof(sendUIMsg->userId));
+				strncpy(pCon->passwd, sendUIMsg->passwd, sizeof(sendUIMsg->passwd));
+				printf("[SENDUI] %s  login\n", sendUIMsg->userId);
 				}
 				break;
 			case CMD_GETREMOTE: //get address and port of remote host
 				{
-				char UsrHashId[9]={0};
-				char Pass[6]={0};
+				char UsrHashId[10]={0};
+				char Pass[7]={0};
 				int ev_idx= -1;
+				struct stJQMessage *hdr;
+				print_all_users();
 				memset(send_buffer, 0, 1024);
-				strncpy(UsrHashId, recv_buffer+4 , 9);
-				strncpy(Pass, recv_buffer+13, 6);
+				struct GetRemoteMessage *grMsg = (struct GetRemoteMessage *)
+					(recv_buffer + sizeof(struct stJQMessage));
+				hdr = (struct stJQMessage *) send_buffer;
+				struct GetRemoteAckMessage *remoteAck = (struct GetRemoteAckMessage *)
+						(send_buffer +sizeof(struct stJQMessage));
+				strncpy(UsrHashId, grMsg->userId, sizeof(grMsg->userId));
+				strncpy(Pass, grMsg->passwd, sizeof(grMsg->passwd));
 				ev_idx = get_matched_event_index_by_UsrHashId(UsrHashId);
 				if(ev_idx == -1) {
 					LOG_INFO(LOG_LEVEL_WARNING, "Not Found client event index,  may be caused by the client being offline");
-					dptr = 0;
-					*(int *)send_buffer = CMD_GETREMOTE;
-					dptr += 4;
-					snprintf(send_buffer + dptr, 512, "Not Found client event index,  may be caused by the client being offline");
-					dptr += 512;
-					send_buffer_to_fd(sockfd, send_buffer, dptr+1);
+					
+					
+					hdr->iMessageType = CMD_GETREMOTE_ACK;
+					remoteAck->flag = false;
+					snprintf(remoteAck->info, 256, "Not Found client event index,  may be caused by the client being offline");
+					len = sizeof(struct stJQMessage) + sizeof(struct GetRemoteAckMessage);
+					hdr->iMessageLen = len;
+					printf("send remote ack: %s\n", remoteAck->info);
+					send_buffer_to_fd(sockfd, send_buffer, len);
 					break;
 				}
 				EPOLL_CONNECT *pCon = get_connect_prv_by_index(ev_idx);
-				dptr = 0;
-				memset(send_buffer, 0, 1024);
-				*(int *)send_buffer = CMD_GETREMOTE;
-				dptr += 4;
-				snprintf(send_buffer+dptr, 512, "clientIp:%s clientPort:%d", pCon->client_ip_addr, pCon->client_port);
-				dptr += 512;
-				send_buffer_to_fd(sockfd, send_buffer, dptr+1);
+				
+				hdr->iMessageType = CMD_GETREMOTE_ACK;
+				remoteAck->flag = true;
+				remoteAck->ip = inet_addr(pCon->client_ip_addr); 
+				remoteAck->port = pCon->client_port;
+				snprintf(remoteAck->info, 256, "clientIp:%s clientPort:%d", pCon->client_ip_addr, pCon->client_port);
+				len = sizeof(struct stJQMessage) + sizeof(struct GetRemoteAckMessage);
+				hdr->iMessageLen = len;
+				send_buffer_to_fd(sockfd, send_buffer, len);
 				break;
 				}
-			case CMD_HANDSHAKE:
+		
+			case CMD_GETALLUSER:
 				{
-				dptr = 0;
-				printf("get msg : %s\n", recv_buffer+4);
-				memset(send_buffer, 0, 1024);
-				//strcpy(send_buffer, "I have get you data");
-				*(int *)send_buffer = CMD_HANDSHAKE;
-				dptr += 4;
-				snprintf(send_buffer+ dptr, 512, "addr:%s port:%d ",
-					get_client_addr_by_index(matched_event_index),
-					get_client_port_by_index(matched_event_index));
-				dptr +=  strlen(send_buffer + dptr);
-				send_buffer_to_fd(sockfd, send_buffer, dptr+1);
-				break;
+					int cnt = 0;
+					printf("[CMD_GETALLUSER] ===>\n");
+					get_all_users(NULL, &cnt);
+					char *send_buf = malloc(sizeof(struct stJQMessage)+ sizeof(int)
+						+sizeof(struct JQUserNode)*cnt) ;
+					struct stJQMessage *hdr = (struct stJQMessage *)send_buf;
+					struct GetAllUserAckMessage *gauAck = (struct GetAllUserAckMessage *)
+						((char *) hdr + sizeof(struct stJQMessage));
+					hdr->iMessageType = CMD_GETALLUSER_ACK;
+					
+					gauAck->cnt = cnt;
+					
+					get_all_users((char *)gauAck, &cnt);
+					len = sizeof(struct stJQMessage) + sizeof(int) + 
+						sizeof(struct JQUserNode)*cnt;
+					hdr->iMessageLen = len;
+					send_buffer_to_fd(sockfd, send_buf, len);
+					printf("[CMD_GETALLUSER] send cnt %d\n", cnt);
+					free(send_buf);
 				}
 			default:
 				break;
@@ -617,7 +665,7 @@ int main(int argc, char *argv[])
 			{
 				int event_index = -1;
 				int recv_length = 0;
-				unsigned char recv_buffer[BUFFER_SIZE];
+				unsigned char recv_buffer[BUFFER_SIZE]={0};
 
 				if (connect_socket_fd_temp < 0)
 				{
