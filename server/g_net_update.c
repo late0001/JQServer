@@ -8,7 +8,7 @@
 #include "config_info.h"
 #include "log.h"
 #include "epoll_connect.h"
-#include "thread_pool.h"
+#include "udp_thread_pool.h"
 #include "g_net_update.h"
 #include "database_process.h"
 #include "proto.h"
@@ -17,12 +17,15 @@
 #define false 0
 #define bool int
 
+#define MAXBUF 1024
+#define SERVER_UDP_PORT 								8814
 #define	CONNECT_TO_SQL_SUCCESS							0
 #define SERVER_TIMEOUT									60 * 1 //60S
 
 static CONFIG_INFO config_info;
 static int epoll_fd = -1; // the epoll fd
 static int listen_fd = -1; // the socket fd socket create return
+static int listen_udp_fd = -1;
 static pthread_t accep_thread_t;
 static pthread_t send_thread_t;
 
@@ -256,9 +259,81 @@ static void *accept_thread(void *arg)
 	return NULL;
 }
 
+static void *udp_thread(void *arg)
+{
+	int connect_fd = -1;
+	socklen_t clilen = 0;
+	struct sockaddr_in serveraddr;
+	struct sockaddr_in clientaddr;
+	struct sockaddr cliaddr;
+	struct epoll_event ev;
+	int val = 1;
+	int err = 0;
+	int bufsize = 32 * 1024; //1024*2048;
+	
+	char log_str_buf[LOG_STR_BUF_LEN] = {0};
+
+	listen_udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (-1 == listen_udp_fd) // INVALID_SOCKET
+	{
+		LOG_INFO(LOG_LEVEL_ERROR, "create socket error.\n");
+		return NULL;
+	}
+	//set socket options
+	err = setsockopt(listen_udp_fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
+	if (0 != err)
+	{
+		LOG_INFO(LOG_LEVEL_ERROR, "setsockopt SO_REUSEADDR error.\n");
+		return NULL;
+	}
+
+	set_non_blocking(listen_udp_fd);
+	bzero(&serveraddr, sizeof(serveraddr));
+	serveraddr.sin_addr.s_addr = INADDR_ANY;
+	serveraddr.sin_port = htons(/*config_info.port*/SERVER_UDP_PORT); //serveraddr.sin_port  = htons(SERVER_LISTEN_PORT);
+	serveraddr.sin_family = AF_INET;
+	if (-1 == bind(listen_udp_fd, (struct sockaddr *)&serveraddr, sizeof(serveraddr))) // SOCKET_ERROR
+	{
+		LOG_INFO(LOG_LEVEL_ERROR, "bind config port %d error.\n", /*config_info.port*/SERVER_UDP_PORT);		
+		printf("bind config port %d error.\n", /*config_info.port*/SERVER_UDP_PORT);
+		return NULL;
+	}
+	printf("bind config port %d success.\n", /*config_info.port*/SERVER_UDP_PORT);
+
+
+	
+	//init_epoll_connect_by_index(epoll_connect_event_index,
+	//	connect_fd, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+	// add epoll event
+	ev.data.fd = listen_udp_fd;
+	ev.events = EPOLLIN | EPOLLET; // set epoll event type
+	if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, listen_udp_fd, &ev) < 0)
+	{
+		LOG_INFO(LOG_LEVEL_ERROR, "EPOLL_CTL_ADD %d,%s.\n", errno, strerror(errno));
+		
+		if (listen_udp_fd != -1)
+		{
+			closesocket(listen_udp_fd);
+			listen_udp_fd = -1;
+		}
+		
+	}
+		
+		
+
+	//if (-1 != listen_udp_fd) // out the while then close the socket
+	//{
+	//	closesocket(listen_udp_fd);
+	//	listen_udp_fd = -1;
+	//}
+	return NULL;
+}
+
+
 static int create_accept_task(void)
 {
-	return pthread_create(&accep_thread_t, NULL, accept_thread, NULL);
+	//return pthread_create(&accep_thread_t, NULL, accept_thread, NULL);
+	return pthread_create(&accep_thread_t, NULL, udp_thread, NULL);
 }
 /*************************************************************************/
 
@@ -272,6 +347,54 @@ static int recv_buffer_from_fd(int socket_fd, char *recv_buffer, int *recv_lengt
 	while (read_continue)
 	{
 		len = recv(socket_fd, &recv_buffer[total_recv_length], BUFLEN, 0);
+		if (len > 0)
+		{
+			total_recv_length += len;
+		}
+
+		if (len < 0) // error
+		{
+//			if (errno == EAGAIN)
+//			{
+//				continue_read = 0;
+//				break;
+//			}
+			read_continue = 0;
+			rev = -1;
+			break;
+		}
+		else if (len >= 0 && len < BUFLEN) // read over
+		{
+			read_continue = 0;
+			rev = 0;
+			*recv_length = total_recv_length;
+			break;
+		}
+		else
+		{
+			read_continue = 0;
+			rev = -1;
+			break;
+		}
+	}
+	return rev;
+}
+
+static int udp_recv_buffer_from_fd(int socket_fd, char *recv_buffer, int *recv_length, 
+	struct sockaddr_in *pclient_addr)
+{
+	
+#define BUFLEN 1024
+	int rev = -1;
+	int read_continue = 1;
+	int total_recv_length = 0, len = 0;
+	
+    socklen_t cli_len=sizeof(*pclient_addr);
+	while (read_continue)
+	{
+		len = recvfrom(socket_fd, &recv_buffer[total_recv_length], MAXBUF, 0, (struct sockaddr *)pclient_addr, &cli_len);
+		//len = recv(socket_fd, &recv_buffer[total_recv_length], BUFLEN, 0);
+		printf("receive from %s\n", inet_ntoa(pclient_addr->sin_addr));
 		if (len > 0)
 		{
 			total_recv_length += len;
@@ -336,10 +459,40 @@ static int send_buffer_to_fd(int socket, unsigned char *pucBuf, int iLen)
 	return (iLen - n);
 }
 
+static int udp_send_buffer_to_fd(int socket, struct sockaddr_in *client_addr, unsigned char *pucBuf, int iLen)
+{
+	int n;
+	int nwrite;
+
+	n = iLen;
+	socklen_t cli_len=sizeof(*client_addr);
+	while (n > 0)
+	{
+		//nwrite = write(socket, pucBuf + iLen - n, n);
+		nwrite = sendto(socket, pucBuf + iLen - n, n, 0, (struct sockaddr *)client_addr, cli_len);
+		if (nwrite < n)
+		{
+			if (nwrite == -1)
+			{
+				if (errno != EAGAIN)
+				{
+					LOG_INFO(LOG_LEVEL_ERROR, "Write.\n");
+					return 0;
+				}
+				else
+				{
+					LOG_INFO(LOG_LEVEL_INFO, "Write EAGAIN.\n");
+				}
+			}
+		}
+		n -= nwrite;
+	}
+	return (iLen - n);
+}
 
 static void dumpInfo(unsigned char *info, int length)
 {
-	char log_str_buf[LOG_STR_BUF_LEN];
+	//char log_str_buf[LOG_STR_BUF_LEN];
 	int index = 0;
 	int j = 0;
 	char buffer[128] = {0};
@@ -353,7 +506,7 @@ static void dumpInfo(unsigned char *info, int length)
 }
 
 
-void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index)
+void* respons_stb_info(udp_job_parameter *parameter, int thread_index)
 {
 	char *recv_buffer;
 	char send_buffer[1024] = {0};
@@ -363,6 +516,7 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 	int dptr = 0;
 	int len = 0;
 	recv_buffer = parameter->recv_buffer;
+	struct sockaddr_in client_addr = parameter->client_addr;  
 	struct stJQMessage *msgHead = (struct stJQMessage *)recv_buffer;
 	
 	
@@ -401,7 +555,7 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 				printf("handshake ack: %s\n", stAck->info);
 				len = sizeof(struct stJQMessage) + sizeof(struct HandshakeAckMessage);
 				hdr->iMessageLen = len;
-				send_buffer_to_fd(sockfd, send_buffer, len);
+				udp_send_buffer_to_fd(sockfd, &client_addr, send_buffer, len);
 				break;
 				}
 			case CMD_SENDUI:
@@ -440,7 +594,7 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 					len = sizeof(struct stJQMessage) + sizeof(struct GetRemoteAckMessage);
 					hdr->iMessageLen = len;
 					printf("send remote ack: %s\n", remoteAck->info);
-					send_buffer_to_fd(sockfd, send_buffer, len);
+					udp_send_buffer_to_fd(sockfd, &client_addr, send_buffer, len);
 					break;
 				}
 				EPOLL_CONNECT *pCon = get_connect_prv_by_index(ev_idx);
@@ -452,7 +606,7 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 				snprintf(remoteAck->info, 256, "clientIp:%s clientPort:%d", pCon->client_ip_addr, pCon->client_port);
 				len = sizeof(struct stJQMessage) + sizeof(struct GetRemoteAckMessage);
 				hdr->iMessageLen = len;
-				send_buffer_to_fd(sockfd, send_buffer, len);
+				udp_send_buffer_to_fd(sockfd, &client_addr, send_buffer, len);
 				break;
 				}
 		
@@ -474,7 +628,7 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 					len = sizeof(struct stJQMessage) + sizeof(int) + 
 						sizeof(struct JQUserNode)*cnt;
 					hdr->iMessageLen = len;
-					send_buffer_to_fd(sockfd, send_buf, len);
+					udp_send_buffer_to_fd(sockfd, &client_addr, send_buf, len);
 					printf("[CMD_GETALLUSER] send cnt %d\n", cnt);
 					free(send_buf);
 				}
@@ -496,6 +650,7 @@ void* respons_stb_info(thpool_job_funcion_parameter *parameter, int thread_index
 	}
 
 }
+#if 0
 void recycle_timeout_confd(thpool_t* thpool,time_t now, struct epoll_event *ev)
 {
 	int index = 0;
@@ -531,6 +686,7 @@ void recycle_timeout_confd(thpool_t* thpool,time_t now, struct epoll_event *ev)
 	LOG_INFO(LOG_LEVEL_INDISPENSABLE, "pool queque delete job number = %d.\n", delete_pool_job_number);
 
 }
+#endif
 /*******************************************************************/
 #define LOGI(lvl, fmt, arg...)\
 printf("[%s %s %d]" #fmt,  __FILE__, __FUNCTION__, __LINE__, ##arg)
@@ -539,7 +695,7 @@ int main(int argc, char *argv[])
 	char log_file_name[128] = {0};
 	char log_str_buf[LOG_STR_BUF_LEN];
 	struct rlimit rl;
-	thpool_t *thpool = NULL;
+	udp_thpool_t *thpool = NULL;
 	time_t now;
 	time_t prevTime, eventTime = 0;
 	struct epoll_event ev, events[MAX_EVENTS];
@@ -626,7 +782,7 @@ int main(int argc, char *argv[])
 	}
 
 	// create thread pool
-	thpool = thpool_init(THREAD_POLL_SIZE);
+	thpool = udp_thpool_init(THREAD_POLL_SIZE);
 	if (NULL == thpool)
 	{
 		LOG_INFO(LOG_LEVEL_FATAL, "create thread pool error.\n");
@@ -642,13 +798,13 @@ int main(int argc, char *argv[])
 	eventTime = prevTime;
 	while (!exit_flag)
 	{
-		time(&now);
+		/*time(&now);
 		if (abs(now - eventTime) >= SERVER_TIMEOUT) //SERVER_TIMEOUT second detect one time delete the time out event
 		{
 			printf("60s detect one time =====>\n");
 			eventTime = now;
 			recycle_timeout_confd(thpool, now, &ev);
-		}
+		}*/
 		epoll_events_number = epoll_wait(epoll_fd, events, MAX_EVENTS, 2000); //2seconds
 		for (index = 0; index < epoll_events_number; ++index) // deal with the event
 		{
@@ -666,37 +822,56 @@ int main(int argc, char *argv[])
 				int event_index = -1;
 				int recv_length = 0;
 				unsigned char recv_buffer[BUFFER_SIZE]={0};
+				struct sockaddr_in client_addr;
 
-				if (connect_socket_fd_temp < 0)
+				/*if (connect_socket_fd_temp < 0)
 				{
 					connect_total_count_sub(1);
 					LOG_INFO(LOG_LEVEL_ERROR, "Event[%d] read invalid handle.\n", index);
 					continue;
-				}
-				event_index = get_matched_event_index_by_fd(connect_socket_fd_temp);
-				LOG_INFO(LOG_LEVEL_ERROR, "Epoll get Event[%d] fd = %d.\n", event_index, connect_socket_fd_temp);
+				}*/
 				
-				// no the event
-				if (event_index < 0)
-				{
-					connect_total_count_sub(1);
-					LOG_INFO(LOG_LEVEL_ERROR, "not find matched fd = %d.\n", connect_socket_fd_temp);
-					
-					free_event_by_index(event_index);
-					if (connect_socket_fd_temp != -1)
-					{
-						closesocket(connect_socket_fd_temp);
-						connect_socket_fd_temp = -1;
-					}
-					continue;
-				}
 				// receive the buffer from the socket fd
-				if (0 == recv_buffer_from_fd(connect_socket_fd_temp, recv_buffer, &recv_length))
+				if (0 == udp_recv_buffer_from_fd(connect_socket_fd_temp, recv_buffer, &recv_length, &client_addr))
 				{
-					LOG_INFO(LOG_LEVEL_INDISPENSABLE, "recv_length = %d, current fd = %d, current job queue job number = %d.\n",recv_length, connect_socket_fd_temp, get_jobqueue_number(thpool));
+					LOG_INFO(LOG_LEVEL_INDISPENSABLE, "recv_length = %d, current fd = %d, current job queue job number = %d.\n",
+						recv_length, connect_socket_fd_temp, get_jobqueue_number(thpool));
+					event_index = get_matched_event_index_by_fd(connect_socket_fd_temp);
+					LOG_INFO(LOG_LEVEL_ERROR, "Epoll get Event[%d] fd = %d.\n", event_index, connect_socket_fd_temp);
+					
+					// no the event
+					if (event_index < 0)
+					{
+						
+						LOG_INFO(LOG_LEVEL_ERROR, "not find matched fd = %d.\n", connect_socket_fd_temp);
+						//init_epoll_connect_by_index(int iEvent,int iConnectFD,char * uiClientIP,int cliPort)
+						event_index = get_epoll_connect_free_event_index();
+						LOG_INFO(LOG_LEVEL_ERROR, "alloc event_index = %d.\n", event_index);
+						// no free epoll event
+						if (event_index == -1) // no the free connect event
+						{
+							LOG_INFO(LOG_LEVEL_ERROR, "Not find free connect.\n");
+							if (connect_socket_fd_temp != -1)
+							{
+								closesocket(connect_socket_fd_temp);
+								connect_socket_fd_temp = -1;
+							}
+							continue;
+						}
+						init_epoll_connect_by_index(event_index, connect_socket_fd_temp, 
+							inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+						//free_event_by_index(event_index);
+						/*
+						if (connect_socket_fd_temp != -1)
+						{
+							closesocket(connect_socket_fd_temp);
+							connect_socket_fd_temp = -1;
+						}
+						continue;*/
+					}
 					dumpInfo((unsigned char *)recv_buffer, recv_length);
 					// receive buffer success then add the thread pool
-					thpool_add_work(thpool, (void*)respons_stb_info, event_index, connect_socket_fd_temp, recv_buffer);
+					udp_thpool_add_work(thpool, (void*)respons_stb_info, event_index, connect_socket_fd_temp, client_addr, recv_buffer);
 				}
 				else
 				{
@@ -735,17 +910,17 @@ int main(int argc, char *argv[])
 		}
 	}
 	log_close();
-	if (listen_fd != -1)
+	if (listen_udp_fd != -1)
 	{
-		closesocket(listen_fd);
-		listen_fd = -1;
+		closesocket(listen_udp_fd);
+		listen_udp_fd = -1;
 	}
 
 #if CONNECT_TO_SQL_SUCCESS
 	sql_pool_destroy();
 #endif
 	exit_accept_flag = 1;
-	thpool_destroy(thpool);
+	udp_thpool_destroy(thpool);
 	printf("[%s %s %d]Done...\n", __FILE__, __FUNCTION__, __LINE__);
 	return 1;
 }

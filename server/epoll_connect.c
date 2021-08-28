@@ -52,8 +52,7 @@ void init_epoll_connect(void)
 		iRet = pthread_mutex_init(&epoll_connect_client[iIndex].mutex, NULL);
 		if (iRet != 0)
 		{
-			snprintf(log_str_buf, LOG_STR_BUF_LEN, "file connection.c Event[%d] mutex init\n", iRet);
-			log_s(LOG_LEVEL_INFO, log_str_buf);
+			LOG_INFO(LOG_LEVEL_INFO, " Event[%d] mutex init\n", iRet);
 		}
 	}
 }
@@ -71,7 +70,10 @@ int get_epoll_connect_free_event_index(void)
 	}
 	return (-1);
 }
-
+/**
+* @param 
+* iEvent : epoll_connect_client数组的索引
+*/
 void init_epoll_connect_by_index(int iEvent, int iConnectFD, char *uiClientIP, int cliPort)
 {
 	time_t now;

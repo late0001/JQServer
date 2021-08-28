@@ -2,7 +2,7 @@
 //
 #include "stdafx.h"
 #define SRV_IPADDR "192.168.0.109" // "172.29.11.221" //
-#define SRV_PORT 8812 //port
+#define SRV_PORT 8814 //port
 #define COMMANDMAXC 256
 //TcpClient.cpp
 #include <stdio.h>
@@ -14,14 +14,25 @@
 #include <iostream>
 #include "proto.h"
 using namespace std;
+
+struct recv_parameter {
+	SOCKET sockCli;
+	SOCKADDR_IN addrSrv;
+};
+
 void recv_func(void *arg)
 {
 	char recvBuf[256];
-	SOCKET sockClient = *(SOCKET *)arg;
+	struct recv_parameter *recv_param =(struct recv_parameter *)arg;
+	SOCKET sockCli = recv_param->sockCli;
+	sockaddr_in addrSrv = recv_param->addrSrv;
+	socklen_t addrlen;
 	struct stJQMessage *stHead;
 	int len = 0;
+	addrlen = sizeof(addrSrv);
 	while (true){
-		while (len = recv(sockClient, recvBuf, 1024, 0) > 0) {
+		//while (len = recv(sockClient, recvBuf, 1024, 0) > 0) {
+		while (len = recvfrom(sockCli, recvBuf, 1024, 0, (sockaddr *)&addrSrv, &addrlen) > 0) {
 			stHead = (struct stJQMessage *)recvBuf;
 			switch (stHead->iMessageType)
 			{
@@ -50,7 +61,7 @@ void recv_func(void *arg)
 				printf("userId   |   Password  | IP | port | create time\n");
 				for (i = 0; i < cnt; i++) {
 					node = &gauaMsg->node[i];
-					printf("%s  %s   %s %d %d\n", node->UsrhashId,
+					printf("%s  %s   %s %d %I64d\n", node->UsrhashId,
 						node->passwd,
 						node->client_ip_addr,
 						node->client_port,
@@ -69,15 +80,18 @@ void recv_func(void *arg)
 
 }
 
-SOCKET sockSrvInTimer = NULL;
+struct recv_parameter recv_param_in_timer;
 //定时事件  
 void  CALLBACK TimeProc(HWND hwnd, UINT message, UINT_PTR idTimer, DWORD dwTime)
 {
 	char send_buffer[512] = { 0 };
 	struct HeartBeatMessage hbMsg;
 	hbMsg.iMessageType = CMD_HEARTBEAT;
-	if (sockSrvInTimer) {
-		send(sockSrvInTimer, (char *)&hbMsg, sizeof(struct HeartBeatMessage), 0);
+	SOCKET sockCli = recv_param_in_timer.sockCli;
+	sockaddr_in addrSrv = recv_param_in_timer.addrSrv;
+	if (sockCli) {
+		sendto(sockCli, (char *)&hbMsg, sizeof(struct HeartBeatMessage), 0, 
+			(struct sockaddr*)&addrSrv, sizeof(addrSrv));
 	}else {
 		printf("socket fd have lost! \n");
 	}
@@ -91,7 +105,7 @@ unsigned  CALLBACK heartbeat_proc(PVOID arg)
 	//强制系统为线程建立消息队列  
 	MSG msg;
 	PeekMessage(&msg, NULL, WM_USER, WM_USER, PM_NOREMOVE);
-	sockSrvInTimer = *(SOCKET *)arg;
+	recv_param_in_timer = *(struct recv_parameter *)arg;
 	//设置定时器  
 	SetTimer(NULL, 10, 500, TimeProc);
 	//获取并分发消息  
@@ -176,8 +190,10 @@ int ConstructGetAllUserPkt(char *buf, int *pktlen)
 
 // 解析命令，暂时只有exit和send命令
 // 新增getu命令，获取当前服务器的所有用户
-int ParseCommand(char * CommandLine, SOCKET sockClient)
+int ParseCommand(char * CommandLine, struct recv_parameter *recv_param)
 {
+	SOCKET sockClient = recv_param->sockCli;
+	sockaddr_in addrSrv = recv_param->addrSrv;
 	char send_buffer[1024] = { 0 };//"Hello JQServer";
 	int pktlen = 0;
 	if (strlen(CommandLine) < 4) {
@@ -195,14 +211,25 @@ int ParseCommand(char * CommandLine, SOCKET sockClient)
 	else if (strcmp(Command, "getu") == 0) {
 		printf("Send command to get remote address\n");
 		ConstructGetRemotePkt(send_buffer, &pktlen, "876543210", "CiGeWK");
-		send(sockClient, send_buffer, pktlen, 0);
+		sendto(sockClient, send_buffer, pktlen, 0, (struct sockaddr *)&addrSrv, sizeof(addrSrv));
 	}
 	else if (strcmp(Command, "allu") == 0)
 	{
 		printf("Send command to get All user \n");
 		ConstructGetAllUserPkt(send_buffer, &pktlen);
-		send(sockClient, send_buffer, pktlen, 0);
+		sendto(sockClient, send_buffer, pktlen, 0, (struct sockaddr *)&addrSrv, sizeof(addrSrv));
 	}
+	return 0;
+}
+
+void OutputUsage()
+{
+	printf("You can input command:\n");
+	printf("Command Type:\"send \", \"exit \", \"getu \" ...\n");
+	printf("Example : send Username Message\n");
+	printf("          exit\n");
+	printf("          getu\n");
+	printf("          allu\n");
 }
 
 int main()
@@ -221,24 +248,28 @@ int main()
 		WSACleanup();
 		return -1;
 	}
-	SOCKET sockClient = socket(AF_INET, SOCK_STREAM, 0);//建立套接字
+	SOCKET sockCli = socket(AF_INET, SOCK_DGRAM, 0);//建立套接字
 	SOCKADDR_IN addrSrv;
 	inet_pton(AF_INET, SRV_IPADDR, &addrSrv.sin_addr);
 	//addrSrv.sin_addr.S_un.S_addr = inet_addr("127.0.0.1"); "49.152.49.84");
 	addrSrv.sin_family = AF_INET;
 	addrSrv.sin_port = htons(SRV_PORT);
-	err = connect(sockClient, (SOCKADDR*)&addrSrv, sizeof(SOCKADDR));//连接到目的主机
+	/*err = connect(sockClient, (SOCKADDR*)&addrSrv, sizeof(SOCKADDR));//连接到目的主机
 	if (err == SOCKET_ERROR) 
 		printf("Socket error\n");
-	char recvBuf[100];
+	*/
+	struct recv_parameter recv_param;
+	recv_param.addrSrv = addrSrv;
+	recv_param.sockCli = sockCli;
+	//char recvBuf[100];
 	char send_buffer[1024] = { 0 };//"Hello JQServer";
 	char *greets = "Hello JQServer! I'm windows client";
 	int pktlen = 0;
 	ConstructHandShakePkt(send_buffer, &pktlen, greets);
 	printf("Send handshake!\n");
-	send(sockClient, send_buffer, pktlen, 0);
+	sendto(sockCli, send_buffer, pktlen, 0, (struct sockaddr *)&addrSrv, sizeof(addrSrv));
 
-	_beginthread(recv_func, NULL, &sockClient);
+	_beginthread(recv_func, NULL, &recv_param);
 	Sleep(5);
 	//send self information
 	ConstructSendUIPkt(send_buffer, &pktlen, "123456798", "WiGeWd");
@@ -246,13 +277,13 @@ int main()
 	//cout << "Send len "<< cur_dptr <<endl;
 	printf("Send user info\n");
 	printf("Send len %d\n", pktlen);
-	if (SOCKET_ERROR == send(sockClient, send_buffer, pktlen, 0)) {
-		printf("Error code: %d", WSAGetLastError());
+	if (SOCKET_ERROR == sendto(sockCli, send_buffer, pktlen, 0, (struct sockaddr *)&addrSrv, sizeof(addrSrv))) {
+		printf("Error code: %d\n", WSAGetLastError());
 	}
-	printf("sockfd: %ld\n", sockClient);
-
+	printf("sockfd: %ld\n", sockCli);
+	/*
 	BOOL bKeepAlive = TRUE;
-	int nRet = setsockopt(sockClient, SOL_SOCKET, SO_KEEPALIVE,
+	int nRet = setsockopt(sockCli, SOL_SOCKET, SO_KEEPALIVE,
 		(char*)&bKeepAlive, sizeof(bKeepAlive));
 	if (nRet == SOCKET_ERROR)
 	{
@@ -266,14 +297,14 @@ int main()
 	alive_in.keepaliveinterval = 5000; //5s  
 	alive_in.onoff = TRUE;
 	unsigned long ulBytesReturn = 0;
-	nRet = WSAIoctl(sockClient, SIO_KEEPALIVE_VALS, &alive_in, sizeof(alive_in),
+	nRet = WSAIoctl(sockCli, SIO_KEEPALIVE_VALS, &alive_in, sizeof(alive_in),
 		&alive_out, sizeof(alive_out), &ulBytesReturn, NULL, NULL);
 	if (nRet == SOCKET_ERROR)
 	{
 		printf("WSAIoctl failed: %d\n", WSAGetLastError());
 		return FALSE;
-	}
-	 _beginthreadex(NULL, NULL, heartbeat_proc, &sockClient,0, NULL );
+	}*/
+	 _beginthreadex(NULL, NULL, heartbeat_proc, &recv_param,0, NULL );
 
 	//while (true)
 	//{
@@ -287,12 +318,12 @@ int main()
 	//	//send(sockClient, sendBuf, strlen(sendBuf) + 1, 0);
 	//}
 	
-
+	OutputUsage();
 	for (;;)
 	{
 		char Command[COMMANDMAXC];
 		gets_s(Command);
-		ParseCommand(Command, sockClient);
+		ParseCommand(Command, &recv_param);
 	}
 	
 // 	closesocket(sockClient);//关闭套接字
