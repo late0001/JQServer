@@ -117,6 +117,7 @@ CONFIG_INFO *get_config_info(void)
 {
 	return &config_info;
 }
+#if 0
 /****************************** accept task ******************************************/
 static void *accept_thread(void *arg)
 {
@@ -258,7 +259,7 @@ static void *accept_thread(void *arg)
 	}
 	return NULL;
 }
-
+#endif
 static void *udp_thread(void *arg)
 {
 	int connect_fd = -1;
@@ -393,8 +394,7 @@ static int udp_recv_buffer_from_fd(int socket_fd, char *recv_buffer, int *recv_l
 	while (read_continue)
 	{
 		len = recvfrom(socket_fd, &recv_buffer[total_recv_length], MAXBUF, 0, (struct sockaddr *)pclient_addr, &cli_len);
-		//len = recv(socket_fd, &recv_buffer[total_recv_length], BUFLEN, 0);
-		printf("receive from %s\n", inet_ntoa(pclient_addr->sin_addr));
+		//printf("receive from %s\n", inet_ntoa(pclient_addr->sin_addr));
 		if (len > 0)
 		{
 			total_recv_length += len;
@@ -492,16 +492,26 @@ static int udp_send_buffer_to_fd(int socket, struct sockaddr_in *client_addr, un
 
 static void dumpInfo(unsigned char *info, int length)
 {
-	//char log_str_buf[LOG_STR_BUF_LEN];
 	int index = 0;
 	int j = 0;
-	char buffer[128] = {0};
-	memset(buffer, 0, 128);
-	for (index = 0; index < length; index++, j+=2)
-	{
-		sprintf(&buffer[j],"%02x",info[index]);
+	char buffer[128] ;
+	struct stJQMessage *msgHead = (struct stJQMessage *)info;
+	if(msgHead->iMessageType == CMD_HEARTBEAT){//not dump heartbeat packet
+		return;
 	}
-	LOG_INFO(LOG_LEVEL_INDISPENSABLE, "dump info length = %d, %s\n", length, buffer);
+	bzero(buffer, 128*sizeof(char));
+	LOG_INFO(LOG_LEVEL_INDISPENSABLE, "dump info length = %d\n", length);
+	for (index = 0; index < length; index++, j+=3)
+	{
+		sprintf(&buffer[j],"%02x ",info[index]);
+		if((j+3)/3   == 16){
+			buffer[j+3] = 0;
+			j = 0;
+			LOG_INFO(LOG_LEVEL_INDISPENSABLE, "%s\n", buffer);
+		}
+	}
+	buffer[j]=0;
+	LOG_INFO(LOG_LEVEL_INDISPENSABLE, "%s\n", buffer);
 	
 }
 
@@ -518,20 +528,21 @@ void* respons_stb_info(udp_job_parameter *parameter, int thread_index)
 	recv_buffer = parameter->recv_buffer;
 	struct sockaddr_in client_addr = parameter->client_addr;  
 	struct stJQMessage *msgHead = (struct stJQMessage *)recv_buffer;
-	
+
+	char *client_ip;
+	client_ip = inet_ntoa(client_addr.sin_addr);
 	
 	if(msgHead->iMessageType!= CMD_HEARTBEAT){
-		printf("[sockfd: %d] get command: 0x%x \n", sockfd, msgHead->iMessageType);
-		printf("[sockfd: %d] get buffer: %s \n",sockfd, recv_buffer +8);
+		printf("[sockfd: %d %s] get command: 0x%x \n", sockfd, client_ip, msgHead->iMessageType);
+		printf("[sockfd: %d %s] get buffer: %s \n",sockfd, client_ip, recv_buffer +8);
 	}
 	
-	
-	//send_buffer_to_fd(sockfd, send_buffer, strlen(send_buffer));
 	
 	// deal with you logic
 	if (sockfd != -1)
 	{
-		int matched_event_index = get_matched_event_index_by_fd(sockfd);
+		//int matched_event_index = get_matched_event_index_by_fd(sockfd);
+		int matched_event_index = get_matched_event_index_by_addr(&client_addr);
 		//for (index = 0; index < 2; index++, j+=2)
 		//{
 		//sprintf(&recv_buf[j], "%02x", recv_buffer[index]);
@@ -585,9 +596,8 @@ void* respons_stb_info(udp_job_parameter *parameter, int thread_index)
 				strncpy(Pass, grMsg->passwd, sizeof(grMsg->passwd));
 				ev_idx = get_matched_event_index_by_UsrHashId(UsrHashId);
 				if(ev_idx == -1) {
-					LOG_INFO(LOG_LEVEL_WARNING, "Not Found client event index,  may be caused by the client being offline");
-					
-					
+					LOG_INFO(LOG_LEVEL_WARNING, "Not Found client event index,  may be caused by the client being offline\n");
+										
 					hdr->iMessageType = CMD_GETREMOTE_ACK;
 					remoteAck->flag = false;
 					snprintf(remoteAck->info, 256, "Not Found client event index,  may be caused by the client being offline");
@@ -834,9 +844,10 @@ int main(int argc, char *argv[])
 				// receive the buffer from the socket fd
 				if (0 == udp_recv_buffer_from_fd(connect_socket_fd_temp, recv_buffer, &recv_length, &client_addr))
 				{
-					LOG_INFO(LOG_LEVEL_INDISPENSABLE, "recv_length = %d, current fd = %d, current job queue job number = %d.\n",
-						recv_length, connect_socket_fd_temp, get_jobqueue_number(thpool));
-					event_index = get_matched_event_index_by_fd(connect_socket_fd_temp);
+					//LOG_INFO(LOG_LEVEL_INDISPENSABLE, "recv_length = %d, current fd = %d, current job queue job number = %d.\n",
+					//	recv_length, connect_socket_fd_temp, get_jobqueue_number(thpool));
+					//event_index = get_matched_event_index_by_fd(connect_socket_fd_temp);
+					event_index = get_matched_event_index_by_addr(&client_addr);
 					LOG_INFO(LOG_LEVEL_ERROR, "Epoll get Event[%d] fd = %d.\n", event_index, connect_socket_fd_temp);
 					
 					// no the event
@@ -859,7 +870,7 @@ int main(int argc, char *argv[])
 							continue;
 						}
 						init_epoll_connect_by_index(event_index, connect_socket_fd_temp, 
-							inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+							&client_addr);
 						//free_event_by_index(event_index);
 						/*
 						if (connect_socket_fd_temp != -1)

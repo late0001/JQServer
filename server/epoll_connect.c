@@ -8,7 +8,7 @@
 #include "log.h"
 #include "proto.h"
 #include "epoll_connect.h"
-
+#include <linux/types.h>
 static char log_str_buf[LOG_STR_BUF_LEN];
 static EPOLL_CONNECT epoll_connect_client[MAX_EVENTS];
 
@@ -70,20 +70,23 @@ int get_epoll_connect_free_event_index(void)
 	}
 	return (-1);
 }
+
+
 /**
 * @param 
 * iEvent : epoll_connect_client数组的索引
 */
-void init_epoll_connect_by_index(int iEvent, int iConnectFD, char *uiClientIP, int cliPort)
+void init_epoll_connect_by_index(int iEvent, int iConnectFD, struct sockaddr_in *client_addr)
 {
 	time_t now;
-
 	time(&now);
 	event_state_lock(iEvent);
 	epoll_connect_client[iEvent].now = now;
+	epoll_connect_client[iEvent].client_addr = *client_addr;
 	memset(epoll_connect_client[iEvent].client_ip_addr, 0, IP_ADDR_LENGTH);
-	memcpy(epoll_connect_client[iEvent].client_ip_addr, uiClientIP, IP_ADDR_LENGTH);
-	epoll_connect_client[iEvent].client_port = cliPort;
+	memcpy(epoll_connect_client[iEvent].client_ip_addr, inet_ntoa(client_addr->sin_addr),
+		IP_ADDR_LENGTH);
+	epoll_connect_client[iEvent].client_port = ntohs(client_addr->sin_port);
 	epoll_connect_client[iEvent].connect_fd = iConnectFD;
 	epoll_connect_client[iEvent].socket_status = 1;
 	event_state_unlock(iEvent);
@@ -102,6 +105,23 @@ int get_matched_event_index_by_fd(int iConnectFD)
 	}
 	return (-1);
 }
+
+int get_matched_event_index_by_addr(struct sockaddr_in *cli_addr)
+{
+	int iIndex;
+
+	for (iIndex = 0; iIndex < MAX_EVENTS; iIndex++)
+	{
+
+		__be32 s_addr =	epoll_connect_client[iIndex].client_addr.sin_addr.s_addr;
+		if(cli_addr->sin_addr.s_addr == s_addr)
+		{
+			return iIndex;
+		}
+	}
+	return (-1);
+}
+
 
 int get_all_users(char *buf, int *outlen)
 {

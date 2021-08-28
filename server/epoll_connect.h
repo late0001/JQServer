@@ -22,15 +22,17 @@ typedef struct _epoll_connect_struct_
 	/*The Client IP address and PORT : TCP*/
 	char client_ip_addr[IP_ADDR_LENGTH];
 	int client_port;
+	struct sockaddr_in client_addr;
 	char UsrhashId[10];
 	char passwd[7];
 	pthread_mutex_t mutex;
 } EPOLL_CONNECT;
 
 void init_epoll_connect(void);
-void init_epoll_connect_by_index(int iEvent, int iConnectFD, char *uiClientIP, int cliPort);
+void init_epoll_connect_by_index(int iEvent, int iConnectFD, struct sockaddr_in *client_addr);
 int get_epoll_connect_free_event_index(void);
 int get_matched_event_index_by_fd(int iConnectFD);
+int get_matched_event_index_by_addr(struct sockaddr_in *cli_addr);
 void free_event_by_index(int index);
 int get_fd_by_event_index(int index);
 int update_time_by_index(int index, time_t now);

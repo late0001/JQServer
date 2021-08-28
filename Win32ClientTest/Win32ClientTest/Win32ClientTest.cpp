@@ -1,7 +1,7 @@
 // Win32ClientTest.cpp : 定义控制台应用程序的入口点。
 //
 #include "stdafx.h"
-#define SRV_IPADDR "192.168.0.109" // "172.29.11.221" //
+#define SRV_IPADDR "192.168.0.108" // "172.29.11.221" //
 #define SRV_PORT 8814 //port
 #define COMMANDMAXC 256
 //TcpClient.cpp
