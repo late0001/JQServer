@@ -560,8 +560,10 @@ void* respons_stb_info(udp_job_parameter *parameter, int thread_index)
 				struct HandshakeAckMessage *stAck = (struct HandshakeAckMessage *)
 				((char *)hdr +sizeof(struct stJQMessage));
 				hdr->iMessageType = CMD_HANDSHAKE_ACK;
+				struct in_addr tmp;
+				tmp.s_addr = htonl(get_client_addr_by_index(matched_event_index));
 				snprintf(stAck->info, 256, "addr:%s port:%d ",
-					get_client_addr_by_index(matched_event_index),
+					inet_ntoa(tmp),
 					get_client_port_by_index(matched_event_index));
 				printf("handshake ack: %s\n", stAck->info);
 				len = sizeof(struct stJQMessage) + sizeof(struct HandshakeAckMessage);
@@ -608,15 +610,65 @@ void* respons_stb_info(udp_job_parameter *parameter, int thread_index)
 					break;
 				}
 				EPOLL_CONNECT *pCon = get_connect_prv_by_index(ev_idx);
-				
+				//ack
 				hdr->iMessageType = CMD_GETREMOTE_ACK;
 				remoteAck->flag = true;
-				remoteAck->ip = inet_addr(pCon->client_ip_addr); 
+				remoteAck->ip_addr = pCon->client_ip; 
 				remoteAck->port = pCon->client_port;
-				snprintf(remoteAck->info, 256, "clientIp:%s clientPort:%d", pCon->client_ip_addr, pCon->client_port);
+				struct in_addr tmp;
+				tmp.s_addr = htonl(pCon->client_ip);
+				snprintf(remoteAck->info, 256, "clientIp:%s clientPort:%d", inet_ntoa(tmp), pCon->client_port);
 				len = sizeof(struct stJQMessage) + sizeof(struct GetRemoteAckMessage);
 				hdr->iMessageLen = len;
 				udp_send_buffer_to_fd(sockfd, &client_addr, send_buffer, len);
+				break;
+				}
+			case CMD_P2PTRANS:
+				{
+				// A customer wants the server to send a punch message to another customer
+				char UsrHashId[10]={0};
+				char ip_b[20]={0};
+				//char Pass[7]={0};
+				int ev_idx= -1;
+				struct stJQMessage *hdr;
+				print_all_users();
+				
+				memset(send_buffer, 0, 1024);
+				struct P2PTransMessage *p2pTransMsg = (struct P2PTransMessage *)
+					(recv_buffer + sizeof(struct stJQMessage));
+				strncpy(UsrHashId, p2pTransMsg->userId, sizeof(p2pTransMsg->userId));
+				LOG_INFO_SCREEN(LOG_LEVEL_WARNING, "%s wants to p2p %s\n", inet_ntoa(client_addr.sin_addr), UsrHashId);
+				ev_idx = get_matched_event_index_by_UsrHashId(UsrHashId);
+				if(ev_idx == -1) {
+					LOG_INFO_SCREEN(LOG_LEVEL_WARNING, " [CMD_P2PTRANS] Not Found client event index,  may be caused by the client being offline\n");
+										
+					break;
+				}
+				EPOLL_CONNECT *pCon = get_connect_prv_by_index(ev_idx);
+						
+				struct in_addr tmp;
+				tmp.s_addr = htonl(pCon->client_ip);
+				strcpy(ip_b, inet_ntoa(tmp));
+				LOG_INFO_SCREEN(LOG_LEVEL_WARNING, " A [%s:%d] ------> B [%s:%d]\n", 
+					inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port),
+					ip_b, pCon->client_port);			
+				
+                //send address of A to B
+                // A :  represents the client currently being processed
+				bzero(send_buffer, sizeof(send_buffer));
+				hdr = (struct stJQMessage *) send_buffer;
+				struct P2PMessage *p2pMsg = (struct P2PMessage *)
+						((char *)hdr +sizeof(struct stJQMessage));
+				hdr->iMessageType = CMD_P2PSOMEONEWANTTOCALLYOU;
+				p2pMsg->ipAddr = ntohl(client_addr.sin_addr.s_addr);
+				p2pMsg->port = ntohs(client_addr.sin_port);
+				len = sizeof(struct stJQMessage) + sizeof(struct P2PMessage);
+				hdr->iMessageLen = len;
+				struct sockaddr_in remote;
+                remote.sin_family=AF_INET;
+                remote.sin_port= htons(pCon->client_port); 
+                remote.sin_addr.s_addr = htonl(pCon->client_ip);
+				udp_send_buffer_to_fd(sockfd, &remote, send_buffer, len);	
 				break;
 				}
 		
@@ -641,6 +693,7 @@ void* respons_stb_info(udp_job_parameter *parameter, int thread_index)
 					udp_send_buffer_to_fd(sockfd, &client_addr, send_buf, len);
 					printf("[CMD_GETALLUSER] send cnt %d\n", cnt);
 					free(send_buf);
+					break;
 				}
 			default:
 				break;
@@ -697,6 +750,48 @@ void recycle_timeout_confd(thpool_t* thpool,time_t now, struct epoll_event *ev)
 
 }
 #endif
+
+void recycle_timeout_confd(udp_thpool_t* thpool,time_t now)
+{
+	int index = 0;
+	int connect_socket_fd_temp = -1;
+	int delete_pool_job_number = 0;
+	char log_str_buf[LOG_STR_BUF_LEN];
+	for (index = 0; index < MAX_EVENTS; index++)
+	{
+		connect_socket_fd_temp = get_fd_by_event_index(index);
+		if (connect_socket_fd_temp != -1)
+		{
+			if ((now - get_event_connect_time_by_index(index)) > SERVER_TIMEOUT)
+			{
+				struct in_addr tmp;
+				tmp.s_addr = htonl(get_client_addr_by_index(index));
+				LOG_INFO_SCREEN(LOG_LEVEL_INDISPENSABLE,
+					"Epoll event[%d] timeout will be removed and fd: %d.\n"
+					" client addr: %s\n",
+					index, connect_socket_fd_temp,
+					inet_ntoa(tmp));
+				
+				free_event_by_index(index);
+				//if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, connect_socket_fd_temp, ev) == -1)
+				//{
+				//	 LOG_INFO(LOG_LEVEL_ERROR, "EPOLL_CTL_DEL %d,%s.\n", errno, strerror(errno));
+				//	
+				//}
+				connect_total_count_sub(1);
+				//closesocket(connect_socket_fd_temp);
+				connect_socket_fd_temp = -1;
+			}
+		}
+	}
+	// delete the pool job time out job
+	delete_pool_job_number = delete_timeout_job(thpool, SERVER_TIMEOUT);
+	connect_total_count_sub(delete_pool_job_number);
+	
+	LOG_INFO(LOG_LEVEL_INDISPENSABLE, "pool queque delete job number = %d.\n", delete_pool_job_number);
+
+}
+
 /*******************************************************************/
 #define LOGI(lvl, fmt, arg...)\
 printf("[%s %s %d]" #fmt,  __FILE__, __FUNCTION__, __LINE__, ##arg)
@@ -808,13 +903,13 @@ int main(int argc, char *argv[])
 	eventTime = prevTime;
 	while (!exit_flag)
 	{
-		/*time(&now);
+		time(&now);
 		if (abs(now - eventTime) >= SERVER_TIMEOUT) //SERVER_TIMEOUT second detect one time delete the time out event
 		{
 			printf("60s detect one time =====>\n");
 			eventTime = now;
-			recycle_timeout_confd(thpool, now, &ev);
-		}*/
+			recycle_timeout_confd(thpool, now);
+		}
 		epoll_events_number = epoll_wait(epoll_fd, events, MAX_EVENTS, 2000); //2seconds
 		for (index = 0; index < epoll_events_number; ++index) // deal with the event
 		{
@@ -848,6 +943,7 @@ int main(int argc, char *argv[])
 					//	recv_length, connect_socket_fd_temp, get_jobqueue_number(thpool));
 					//event_index = get_matched_event_index_by_fd(connect_socket_fd_temp);
 					event_index = get_matched_event_index_by_addr(&client_addr);
+	
 					LOG_INFO(LOG_LEVEL_ERROR, "Epoll get Event[%d] fd = %d.\n", event_index, connect_socket_fd_temp);
 					
 					// no the event

@@ -83,9 +83,7 @@ void init_epoll_connect_by_index(int iEvent, int iConnectFD, struct sockaddr_in 
 	event_state_lock(iEvent);
 	epoll_connect_client[iEvent].now = now;
 	epoll_connect_client[iEvent].client_addr = *client_addr;
-	memset(epoll_connect_client[iEvent].client_ip_addr, 0, IP_ADDR_LENGTH);
-	memcpy(epoll_connect_client[iEvent].client_ip_addr, inet_ntoa(client_addr->sin_addr),
-		IP_ADDR_LENGTH);
+	epoll_connect_client[iEvent].client_ip = ntohl(client_addr->sin_addr.s_addr);
 	epoll_connect_client[iEvent].client_port = ntohs(client_addr->sin_port);
 	epoll_connect_client[iEvent].connect_fd = iConnectFD;
 	epoll_connect_client[iEvent].socket_status = 1;
@@ -109,12 +107,25 @@ int get_matched_event_index_by_fd(int iConnectFD)
 int get_matched_event_index_by_addr(struct sockaddr_in *cli_addr)
 {
 	int iIndex;
-
+    unsigned int cli_ip = ntohl(cli_addr->sin_addr.s_addr);
 	for (iIndex = 0; iIndex < MAX_EVENTS; iIndex++)
 	{
 
-		__be32 s_addr =	epoll_connect_client[iIndex].client_addr.sin_addr.s_addr;
-		if(cli_addr->sin_addr.s_addr == s_addr)
+		if( cli_ip == epoll_connect_client[iIndex].client_ip)
+		{
+			return iIndex;
+		}
+	}
+	return (-1);
+}
+
+int get_matched_event_index_by_ip_addr(unsigned int ip_addr)
+{
+	int iIndex;
+
+	for (iIndex = 0; iIndex < MAX_EVENTS; iIndex++)
+	{
+		if(ip_addr == epoll_connect_client[iIndex].client_ip )
 		{
 			return iIndex;
 		}
@@ -146,7 +157,7 @@ int get_all_users(char *buf, int *outlen)
 		if (epoll_connect_client[iIndex].connect_fd != -1)
 		{
 			userNode[cnt].now = epoll_connect_client[iIndex].now;
-			strcpy(userNode[cnt].client_ip_addr, epoll_connect_client[iIndex].client_ip_addr);
+			userNode[cnt].client_ip = epoll_connect_client[iIndex].client_ip;
 			userNode[cnt].client_port = epoll_connect_client[iIndex].client_port;
 			strcpy(userNode[cnt].UsrhashId, epoll_connect_client[iIndex].UsrhashId);
 			strcpy(userNode[cnt].passwd, epoll_connect_client[iIndex].passwd);
@@ -165,9 +176,12 @@ int print_all_users(void)
 
 	for (iIndex = 0; iIndex < 10; iIndex++)
 	{
+		struct in_addr tmp;
+        tmp.s_addr = htonl(epoll_connect_client[iIndex].client_ip);
+		
 		printf("%ld %s %d %s %s\n",
 			epoll_connect_client[iIndex].now,
-			epoll_connect_client[iIndex].client_ip_addr,
+			inet_ntoa(tmp),
 			epoll_connect_client[iIndex].client_port,
 			epoll_connect_client[iIndex].UsrhashId,
 			epoll_connect_client[iIndex].passwd);
@@ -214,6 +228,12 @@ void free_event_by_index(int index)
 		event_state_lock(index);
 		epoll_connect_client[index].connect_fd = -1;
 		epoll_connect_client[index].socket_status = 0;
+		epoll_connect_client[index].client_ip = 0;
+		epoll_connect_client[index].client_port = -1;
+		bzero(epoll_connect_client[index].UsrhashId, 
+			sizeof(epoll_connect_client[index].UsrhashId));
+		bzero(epoll_connect_client[index].passwd, 
+			sizeof(epoll_connect_client[index].passwd));
 		event_state_unlock(index);
 	}
 }
@@ -244,15 +264,15 @@ time_t get_event_connect_time_by_index(int index)
 	}
 }
 
-char *get_client_addr_by_index(int index)
+unsigned int get_client_addr_by_index(int index)
 {
 	if (index >=0 && index < MAX_EVENTS)
 	{
-		return epoll_connect_client[index].client_ip_addr;
+		return epoll_connect_client[index].client_ip;
 	}
 	else
 	{
-		return "0.0.0.0";
+		return 0;
 	}
 }
 

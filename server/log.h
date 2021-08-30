@@ -27,6 +27,13 @@ log_preamble(lvl, "%s %s(%d) ", __FILE__, __FUNCTION__, __LINE__); \
 log_s(lvl, fmt, ##arg); \
 }
 
+#define LOG_INFO_SCREEN(lvl, fmt, arg...) \
+{\
+printf(fmt,##arg); \
+log_preamble(lvl, "%s %s(%d) ", __FILE__, __FUNCTION__, __LINE__); \
+log_s(lvl, fmt, ##arg); \
+}
+
 
 #if 0
 

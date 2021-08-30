@@ -20,13 +20,14 @@ typedef struct _epoll_connect_struct_
 	time_t now;
 	/*********************/
 	/*The Client IP address and PORT : TCP*/
-	char client_ip_addr[IP_ADDR_LENGTH];
+	unsigned int client_ip;
 	int client_port;
 	struct sockaddr_in client_addr;
 	char UsrhashId[10];
 	char passwd[7];
 	pthread_mutex_t mutex;
 } EPOLL_CONNECT;
+
 
 void init_epoll_connect(void);
 void init_epoll_connect_by_index(int iEvent, int iConnectFD, struct sockaddr_in *client_addr);
@@ -37,7 +38,7 @@ void free_event_by_index(int index);
 int get_fd_by_event_index(int index);
 int update_time_by_index(int index, time_t now);
 time_t get_event_connect_time_by_index(int index);
-char *get_client_addr_by_index(int index);
+unsigned int get_client_addr_by_index(int index);
 int get_client_port_by_index(int index);
 EPOLL_CONNECT *get_connect_prv_by_index(int index);
 int get_matched_event_index_by_UsrHashId(char *UsrHashId);
