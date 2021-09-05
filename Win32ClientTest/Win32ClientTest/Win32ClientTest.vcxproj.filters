@@ -27,12 +27,60 @@
     <ClInclude Include="Proto.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="common\login.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="common\declare.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="ClientSocket.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="common\mystring.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="common\utils.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="BaseManager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Manager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="common\common_cmd.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="loop.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="ScreenManager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="Win32ClientTest.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="ClientSocket.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="common\utils.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="common\mystring.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="BaseManager.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Manager.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="ScreenManager.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
