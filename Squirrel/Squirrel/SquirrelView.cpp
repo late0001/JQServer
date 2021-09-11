@@ -235,7 +235,7 @@ void CSquirrelView::OnSize(UINT nType, int cx, int cy)
 	pWnd2 = GetDlgItem(ID_LIST_LOG);
 	if (pWnd2)
 	{				
-		//pWnd2->SetWindowPos(NULL, 0, 0, cx, l_Botton, SWP_NOZORDER|SWP_NOMOVE);
+		pWnd2->SetWindowPos(NULL, 0, 0, cx, l_Botton, SWP_NOZORDER|SWP_NOMOVE);
 		pWnd2->SetWindowPos(NULL, 0, cy - l_Botton,0,0, SWP_NOZORDER|SWP_NOSIZE);
 	}
 }
