@@ -6,6 +6,7 @@
 #include "PcView.h"
 
 
+CPcView*		g_pConnectView;
 typedef struct
 {
 	TCHAR	*title;
@@ -39,7 +40,7 @@ IMPLEMENT_DYNCREATE(CPcView, CListView)
 
 CPcView::CPcView()
 {
-
+	((CSquirrelApp *)AfxGetApp())->m_pConnectView = this;
 }
 
 CPcView::~CPcView()

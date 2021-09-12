@@ -15,6 +15,7 @@
 #define ID_STATUSBAR_PANE2              121
 #define IDS_STATUS_PANE1                122
 #define IDS_STATUS_PANE2                123
+#define IDS_STATUS_PANE3                124
 #define IDR_MAINFRAME                   128
 #define IDR_MAINFRAME_256               129
 #define IDR_SquirrelTYPE                130
@@ -56,13 +57,17 @@
 #define IDS_EDIT_MENU                   306
 #define IDR_RIBBON                      307
 #define IDI_SHIPIN                      310
+#define ID_STATUSBAR_PANE3              310
 #define IDI_USER                        311
+#define ID_STATUSBAR_PANE4              311
 #define IDI_EVENT_ERROR                 314
 #define IDI_EVENT_INFO                  315
 #define IDI_BE_CAREFUL                  316
 #define ID_WRITE_PASTEASHYPERLINK       32770
 #define IDC_TABCONTROL                  61446
 #define ID_LIST_LOG                     61447
+#define ID_LIST_LOG2                    61448
+#define ID_STAUTSSPEED                  61448
 
 // Next default values for new objects
 // 
@@ -71,6 +76,6 @@
 #define _APS_NEXT_RESOURCE_VALUE        317
 #define _APS_NEXT_COMMAND_VALUE         32771
 #define _APS_NEXT_CONTROL_VALUE         1000
-#define _APS_NEXT_SYMED_VALUE           310
+#define _APS_NEXT_SYMED_VALUE           312
 #endif
 #endif

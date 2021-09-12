@@ -65,6 +65,47 @@ BOOL CLogView::PreCreateWindow(CREATESTRUCT& cs)
 	cs.style |=  LVS_REPORT;
 	return CListView::PreCreateWindow(cs);
 }
+void CLogView::InsertLogItem(LPCTSTR Text,int Mode, int Flag)
+{
+	char m_Text[512] = {0};
+	CTime time = CTime::GetCurrentTime();		//构造CTime对象 
+
+	CString strTime = time.Format(" %Y-%m-%d %H:%M:%S");
+	m_pLogList->InsertItem(0, strTime, Flag);//int InsertItem( int nItem, LPCTSTR lpszItem, int nImage );
+	m_pLogList->SetItemText(0, 1, Text);  //BOOL SetItemText( int nItem, int nSubItem, LPTSTR lpszText );
+	switch(Mode)
+	{
+	    case 0:
+		{
+			m_pLogList->SetTextColor(RGB(0,100,250));//蓝色
+		}
+		break;	
+		case 1:
+		{
+			m_pLogList->SetTextColor(RGB(255,0,0));//红色
+		}
+		break;
+		case 2:
+		{
+			m_pLogList->SetTextColor(RGB(0,180,250));//蓝绿色
+		}
+		break;
+		case 3:
+		{
+			m_pLogList->SetTextColor(RGB(200,0,200));//粉色
+		}
+		break;
+		case 4:
+		{
+			m_pLogList->SetTextColor(RGB(0,20,100));//貌似黑色
+		}
+		break;
+		
+	default:
+		m_pLogList->SetTextColor(RGB(0,100,255));//蓝色
+		break;
+	}
+}
 
 
 int CLogView::OnCreate(LPCREATESTRUCT lpCreateStruct)

@@ -459,12 +459,14 @@ BEGIN
     AFX_IDS_PREVIEW_CLOSE   "关闭打印预览模式\n取消预览"
     IDC_TABCONTROL          "tabControl"
     ID_LIST_LOG             "日志列表"
+    ID_STAUTSSPEED          "发送: 0.00 kb/s 接收: 0.00 kb/s"
 END
 
 STRINGTABLE
 BEGIN
     IDS_STATUS_PANE1        "窗格 1"
     IDS_STATUS_PANE2        "窗格 2"
+    IDS_STATUS_PANE3        """--"""
 END
 
 STRINGTABLE

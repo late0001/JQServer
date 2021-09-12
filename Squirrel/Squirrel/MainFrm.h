@@ -34,7 +34,7 @@ public:
 
 // 操作
 public:
-
+	void Activate(UINT nPort, UINT nMaxConnections);
 // 重写
 public:
 	virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
@@ -42,6 +42,7 @@ public:
 // 实现
 public:
 	virtual ~CMainFrame();
+	static void CALLBACK NotifyProc(LPVOID lpParam, ClientContext* pContext, UINT nCode);
 #ifdef _DEBUG
 	virtual void AssertValid() const;
 	virtual void Dump(CDumpContext& dc) const;
@@ -78,6 +79,8 @@ protected:
 	CMFCOutlookBarTabCtrl* FindOutlookParent(CWnd* pWnd);
 	CMFCOutlookBarTabCtrl* m_pCurrOutlookWnd;
 	CMFCOutlookBarPane*    m_pCurrOutlookPage;
+public:
+	afx_msg void OnClose();
 };
 
 

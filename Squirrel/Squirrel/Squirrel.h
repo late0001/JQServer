@@ -23,10 +23,12 @@
 // CSquirrelApp:
 // 有关此类的实现，请参阅 Squirrel.cpp
 //
-
+#include "IniFile.h"
 class CSquirrelApp : public CWinAppEx
 {
 public:
+	CIniFile	m_IniFile;
+	CView*		m_pConnectView; // 主连接视图
 	CSquirrelApp();
 
 

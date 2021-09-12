@@ -31,6 +31,7 @@
 #endif
 
 
+extern CPcView*     g_pConnectView;
 extern CLogView*	g_pLogView;
 // CSquirrelView
 
@@ -269,6 +270,3 @@ void CSquirrelView::OnInitialUpdate()
 	d_tcs |= TCS_BOTTOM;
 	m_wndTabControl.SetExtendedStyle(d_tcs, 0);
 }
-
-
-

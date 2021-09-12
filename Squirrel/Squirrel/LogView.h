@@ -12,6 +12,7 @@ public:
 	virtual ~CLogView();
 
 public:
+	void InsertLogItem(LPCTSTR Text,int Mode, int Flag);
 #ifdef _DEBUG
 	virtual void AssertValid() const;
 #ifndef _WIN32_WCE

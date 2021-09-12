@@ -12,8 +12,10 @@ protected:
 	virtual ~CPcView();
 
 public:
+	
 	CListCtrl *m_pListCtrl;
 	CImageList   I_ImageList;
+	CIOCPServer* m_iocpServer;
 #ifdef _DEBUG
 	virtual void AssertValid() const;
 #ifndef _WIN32_WCE

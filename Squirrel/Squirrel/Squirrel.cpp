@@ -146,6 +146,16 @@ BOOL CSquirrelApp::InitInstance()
 	// 唯一的一个窗口已初始化，因此显示它并对其进行更新
 	m_pMainWnd->ShowWindow(SW_SHOW);
 	m_pMainWnd->UpdateWindow();
+	int	nPort = m_IniFile.GetInt(_T("设置"), _T("ListenPort"));
+	int	nMaxConnection = m_IniFile.GetInt(_T("设置"), _T("MaxConnection"));
+	if (nPort == 0)
+		nPort = 2012;
+	if (nMaxConnection == 0)
+		nMaxConnection = 10000;
+	
+	if (m_IniFile.GetInt(_T("设置"), _T("MaxConnectionAuto")))
+		nMaxConnection = 8000;
+	((CMainFrame*) m_pMainWnd)->Activate(nPort, nMaxConnection);
 	return TRUE;
 }
 

@@ -48,6 +48,15 @@
     <ClInclude Include="LogView.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="include\IOCPServer.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="include\Mapper.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="IniFile.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Squirrel.cpp">
@@ -72,6 +81,12 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="LogView.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="include\IOCPServer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="IniFile.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
