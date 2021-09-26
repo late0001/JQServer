@@ -10,8 +10,12 @@
 #include "IOCPServer.h"
 #include <ws2tcpip.h>
 #include "../MainFrm.h"
-
+#include "../pktmgnt.h"
+#include "../proto.h"
 //#include "zlib/zlib.h"   //../common/zlib/zlib.lib
+
+#define SRV_IPADDR "192.168.0.125" // "172.29.11.221" //
+#define SRV_PORT	8814 //port
 
 #ifdef _DEBUG
 #undef THIS_FILE
@@ -131,6 +135,94 @@ CIOCPServer::~CIOCPServer()
 	}catch(...){}
 }
 
+void recv_func( char *lpBuffer, DWORD dwIoSize)
+{
+	struct stJQMessage *stHead;
+
+	stHead = (struct stJQMessage *)lpBuffer;
+	switch (stHead->iMessageType)
+	{
+
+	case CMD_HANDSHAKE_ACK: {
+		struct HandshakeAckMessage *hsMsg = (struct HandshakeAckMessage *)
+			((char *)stHead + sizeof(struct stJQMessage));
+		TRACE("[HANDSHAKE ACK] %s\n", hsMsg->info);
+		break;
+	}
+
+	default:
+		TRACE("对方说： %s\n", lpBuffer + 8);
+		break;
+	}
+
+}
+int CIOCPServer::SendLoginInfo() 
+{
+	m_socListen = WSASocket(AF_INET, SOCK_DGRAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+	char send_buffer[1024] = { 0 };//"Hello JQServer";
+	char *greets = "Hello JQServer! I'm windows NO.1 client";
+	int pktlen = 0;
+	ConstructHandShakePkt(send_buffer, &pktlen, greets);
+	hostent* pHostent = NULL;
+	pHostent = gethostbyname(SRV_IPADDR);
+
+	if (pHostent == NULL)
+		return false;
+
+	// 构造sockaddr_in结构
+	sockaddr_in	serverAddr;
+	serverAddr.sin_family = AF_INET;
+
+	serverAddr.sin_port = htons(SRV_PORT);
+
+	serverAddr.sin_addr = *((struct in_addr *)pHostent->h_addr);
+	TRACE("Send handshake!\n");
+	WSABUF wsabuf;
+	wsabuf.buf = send_buffer;
+	wsabuf.len = pktlen;
+	DWORD uNumberOfBytesSent;
+	ULONG ulFlags = 0;//MSG_PARTIAL;
+	OVERLAPPED			ol = {0};
+	//ol.hEvent  = CreateEvent(NULL, TRUE, FALSE, NULL);
+	int nRetVal = WSASendTo(m_socListen,
+		&wsabuf,
+		1,
+		&uNumberOfBytesSent,
+		ulFlags,
+		(struct sockaddr *)&serverAddr,
+		sizeof(serverAddr),
+		&ol, //NULL, //
+		NULL
+		);
+	//WSAEOPNOTSUPP
+	if (nRetVal == SOCKET_ERROR) TRACE("GetLastError : %d\n", WSAGetLastError());
+	struct sockaddr_in sa_client;
+	int client_len = sizeof(sa_client);
+	DWORD dwNumberOfBytesRecvd = 0;
+	WSABUF wsabuf_recv;
+	char recv_buffer[1024*8] = { 0 };//"Hello JQServer";
+	wsabuf_recv.buf = recv_buffer;
+	wsabuf_recv.len = 1024;
+	do {
+		Sleep(20);
+		nRetVal = WSARecvFrom(m_socListen,
+			&wsabuf_recv,
+			1,
+			&dwNumberOfBytesRecvd,
+			&ulFlags,
+			(struct sockaddr *)&sa_client,
+			&client_len,
+			&ol, //NULL,//
+			NULL);
+		if (nRetVal < 0) TRACE("WSAGetLastError = %d\n", WSAGetLastError());
+		if (ulFlags & MSG_PARTIAL) {
+			wsabuf_recv.buf = recv_buffer+ client_len;
+			wsabuf_recv.len = 1024;
+		}
+	} while (nRetVal < 0 );
+	recv_func(recv_buffer, dwNumberOfBytesRecvd);
+	return 0;
+}
 ////////////////////////////////////////////////////////////////////////////////
 // 
 // FUNCTION:	Init

@@ -139,7 +139,7 @@ public:
 
 	NOTIFYPROC					m_pNotifyProc;
 	CMainFrame*					m_pFrame;
-	
+	int SendLoginInfo();
 	bool Initialize(NOTIFYPROC pNotifyProc, CMainFrame* pFrame,  int nMaxConnections, int nPort);
 
 	static unsigned __stdcall ListenThreadProc(LPVOID lpVoid);

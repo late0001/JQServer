@@ -57,6 +57,12 @@
     <ClInclude Include="IniFile.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="proto.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="pktmgnt.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Squirrel.cpp">
@@ -87,6 +93,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="IniFile.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="pktmgnt.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

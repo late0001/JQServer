@@ -196,6 +196,8 @@
     <ClInclude Include="LogView.h" />
     <ClInclude Include="MainFrm.h" />
     <ClInclude Include="PcView.h" />
+    <ClInclude Include="pktmgnt.h" />
+    <ClInclude Include="proto.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Squirrel.h" />
     <ClInclude Include="SquirrelDoc.h" />
@@ -212,6 +214,7 @@
     <ClCompile Include="LogView.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="PcView.cpp" />
+    <ClCompile Include="pktmgnt.cpp" />
     <ClCompile Include="Squirrel.cpp" />
     <ClCompile Include="SquirrelDoc.cpp" />
     <ClCompile Include="SquirrelView.cpp" />
